@@ -1,0 +1,11 @@
+# Build Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Exe renomme pendant un rebuild a chaud
+*.exe.old
+
+# Divers
+*.log
+.DS_Store
+Thumbs.db

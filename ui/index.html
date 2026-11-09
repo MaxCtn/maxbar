@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>maxbar</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="root" class="edge-top">
+    <header id="bar">
+      <div class="zone left">
+        <button id="start" class="icon-btn start" aria-label="Menu Démarrer" title="Menu Démarrer — clic droit : menu système">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="11" width="15" height="5.5" rx="2.75"/><rect x="5.5" y="3.5" width="9" height="5" rx="1.6" class="accent"/></svg>
+        </button>
+        <button id="search" class="icon-btn" aria-label="Rechercher" title="Rechercher">
+          <svg viewBox="0 0 20 20" aria-hidden="true" class="stroke"><circle cx="8.6" cy="8.6" r="5.2"/><path d="m12.6 12.6 4 4"/></svg>
+        </button>
+        <div id="dock" role="toolbar" aria-label="Applications"></div>
+      </div>
+
+      <div class="zone right">
+        <button id="tray-btn" class="icon-btn chev" aria-label="Icônes cachées" title="Icônes cachées">
+          <svg viewBox="0 0 20 20" aria-hidden="true" class="stroke"><path d="m6 11.5 4-4 4 4"/></svg>
+          <span id="tray-count" class="count" hidden></span>
+        </button>
+        <div id="claude" class="widget claude" role="button" tabindex="0">
+          <svg class="ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="track" cx="18" cy="18" r="14"/><circle id="claude-ring" class="value" cx="18" cy="18" r="14"/></svg>
+          <div class="stack">
+            <span class="t1"><span id="claude-5h">–</span><span id="claude-delta" class="delta" hidden></span></span>
+            <span id="claude-7d" class="t2">7 j –</span>
+          </div>
+        </div>
+        <div id="weather" class="widget weather" role="button" tabindex="0" hidden>
+          <span id="w-icon" class="wi"></span>
+          <div class="stack"><span id="w-temp" class="t1"></span><span id="w-label" class="t2"></span></div>
+        </div>
+        <div id="sys" class="widget sys" role="button" tabindex="0">
+          <div class="cell"><span class="lbl">CPU</span><span id="cpu" class="val">–</span><i class="meter"><b id="cpu-m"></b></i></div>
+          <div class="cell"><span class="lbl">RAM</span><span id="ram" class="val">–</span><i class="meter"><b id="ram-m"></b></i></div>
+          <div class="cell" id="gpu-cell"><span class="lbl">GPU</span><span id="gpu" class="val">–</span><i class="meter"><b id="gpu-m"></b></i></div>
+          <div class="cell net"><span id="down" class="val sm">↓ –</span><span id="up" class="val sm">↑ –</span></div>
+        </div>
+        <div id="status" class="widget status" role="button" tabindex="0" title="Paramètres rapides — molette : volume">
+          <span id="net-icon" class="si"></span>
+          <span id="vol-icon" class="si"></span>
+          <span id="bat" class="bat" hidden></span>
+        </div>
+        <div id="clock" class="widget clock" role="button" tabindex="0" title="Agenda, météo et réglages">
+          <span id="time" class="t1">--:--</span><span id="date" class="t2"></span>
+        </div>
+        <button id="peek" class="peek" aria-label="Afficher le bureau" title="Afficher le bureau"></button>
+      </div>
+    </header>
+
+    <div id="island" class="island" data-mode="hidden">
+      <div id="iv-compact" class="v v-compact">
+        <span class="i-art"><img id="i-art" alt=""><span class="i-note">♪</span></span>
+        <span class="i-text"><b id="i-title"></b><span id="i-artist"></span></span>
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      </div>
+      <div id="iv-full" class="v v-full">
+        <div class="i-row">
+          <div id="i-cover" class="i-cover"><span>♪</span></div>
+          <div class="i-meta">
+            <span id="i-src" class="i-src"></span>
+            <b id="i-title-l"></b>
+            <span id="i-artist-l"></span>
+          </div>
+          <span class="eq big" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        </div>
+        <div class="i-time">
+          <span id="i-pos">0:00</span>
+          <div class="i-track"><b id="i-bar"></b></div>
+          <span id="i-dur">0:00</span>
+        </div>
+        <div class="i-ctl">
+          <button class="icon-btn" data-media="prev" aria-label="Précédent"><svg viewBox="0 0 20 20"><path d="M5 4.5v11M15.5 4.8 7.6 10l7.9 5.2z"/></svg></button>
+          <button class="icon-btn play" data-media="toggle" aria-label="Lecture / pause"><svg viewBox="0 0 20 20"><path class="i-play" d="M6.5 4.3v11.4L16 10z"/><path class="i-pause" d="M6 4.5h2.8v11H6zM11.2 4.5H14v11h-2.8z"/></svg></button>
+          <button class="icon-btn" data-media="next" aria-label="Suivant"><svg viewBox="0 0 20 20"><path d="M15 4.5v11M4.5 4.8 12.4 10l-7.9 5.2z"/></svg></button>
+        </div>
+      </div>
+      <div id="iv-toast" class="v v-toast">
+        <span id="t-icon" class="t-icon"></span>
+        <span id="t-label" class="t-label"></span>
+        <div class="t-track"><b id="t-bar"></b></div>
+        <span id="t-val" class="t-val"></span>
+      </div>
+    </div>
+
+    <section id="panel" class="pop" role="dialog" aria-live="polite"></section>
+    <aside id="drawer" class="drawer" role="dialog" aria-label="Agenda et réglages"></aside>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
