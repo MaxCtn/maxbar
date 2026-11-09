@@ -1,9 +1,9 @@
-//! Zone de notification (icones des applications en arriere-plan : Discord, Steam, OneDrive...).
+//! Zone de notification (icônes des applications en arrière-plan : Discord, Steam, OneDrive...).
 //!
-//! Les applications deposent leurs icones aupres de la fenetre "Shell_TrayWnd" (Shell_NotifyIcon
-//! -> WM_COPYDATA). maxbar cree une fenetre cachee de la meme classe, maintenue devant celle
-//! d'Explorer : elle lit chaque message puis le retransmet tel quel a Explorer, dont la barre
-//! continue de fonctionner normalement. Meme principe que Zebar (crate systray-util).
+//! Les applications déposent leurs icônes auprès de la fenêtre "Shell_TrayWnd" (Shell_NotifyIcon
+//! -> WM_COPYDATA). maxbar crée une fenêtre cachée de la même classe, maintenue devant celle
+//! d'Explorer : elle lit chaque message puis le retransmet tel quel à Explorer, dont la barre
+//! continue de fonctionner normalement. Même principe que Zebar (crate systray-util).
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering::Relaxed};
@@ -17,13 +17,13 @@ use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, FindWindowW, GetCursorPos,
-    GetMessageW, GetWindowRect, GetWindowThreadProcessId, IsWindow, KillTimer, PostMessageW, RegisterClassW,
-    RegisterWindowMessageW, SendMessageTimeoutW, SendNotifyMessageW, SetTimer, SetWindowPos, TranslateMessage, HICON,
-    HWND_BROADCAST, HWND_TOPMOST, MSG, SMTO_ABORTIFHUNG, SMTO_NORMAL, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
-    SWP_NOSENDCHANGING, WM_COMMAND, WM_CONTEXTMENU, WM_COPYDATA, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
-    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_TIMER, WM_USER, WNDCLASSW, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_POPUP,
+    AllowSetForegroundWindow, CreateWindowExW, DefWindowProcW, DispatchMessageW, FindWindowExW, FindWindowW,
+    GetCursorPos, GetMessageW, GetWindowRect, GetWindowThreadProcessId, IsWindow, KillTimer, PostMessageW,
+    RegisterClassW, RegisterWindowMessageW, SendMessageTimeoutW, SendNotifyMessageW, SetTimer, SetWindowPos,
+    TranslateMessage, HICON, HWND_BROADCAST, HWND_TOPMOST, MSG, SMTO_ABORTIFHUNG, SMTO_NORMAL, SWP_NOACTIVATE,
+    SWP_NOOWNERZORDER, SWP_NOSENDCHANGING, WM_COMMAND, WM_CONTEXTMENU, WM_COPYDATA, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_TIMER, WM_USER, WNDCLASSW,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 use crate::{icons, publish, sys, tasks};
@@ -46,7 +46,7 @@ const T_PRUNE: usize = 2;
 const T_PUBLISH: usize = 3;
 const T_REFRESH: usize = 4;
 
-/// NOTIFYICONDATAW tel que transmis par le shell : poignees sur 32 bits, meme en 64 bits.
+/// NOTIFYICONDATAW tel que transmis par le shell : poignées sur 32 bits, même en 64 bits.
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct NotifyData {
@@ -116,7 +116,7 @@ pub fn start(app: AppHandle) {
     std::thread::spawn(|| unsafe { run() });
 }
 
-/// La vraie barre des taches d'Explorer (en ignorant notre propre fenetre "Shell_TrayWnd").
+/// La vraie barre des tâches d'Explorer (en ignorant notre propre fenêtre "Shell_TrayWnd").
 pub fn explorer_tray() -> HWND {
     let me = unsafe { GetCurrentProcessId() };
     let mut after: Option<HWND> = None;
@@ -170,7 +170,7 @@ unsafe fn run() {
     stay_in_front(h);
     SetTimer(Some(h), T_FRONT, 100, None);
     SetTimer(Some(h), T_PRUNE, 5000, None);
-    // Comme apres un redemarrage d'Explorer : chaque application redeclare ses icones.
+    // Comme après un redémarrage d'Explorer : chaque application redéclare ses icônes.
     broadcast();
     let mut msg = MSG::default();
     while GetMessageW(&mut msg, None, 0, 0).as_bool() {
@@ -183,8 +183,8 @@ unsafe fn broadcast() {
     let _ = SendNotifyMessageW(HWND_BROADCAST, TASKBAR_CREATED.load(Relaxed), WPARAM(0), LPARAM(0));
 }
 
-/// Garde notre fenetre devant celle d'Explorer (FindWindow renvoie la premiere dans l'ordre Z)
-/// et a la meme place, pour les applications qui lisent la position de la barre.
+/// Garde notre fenêtre devant celle d'Explorer (FindWindow renvoie la première dans l'ordre Z)
+/// et à la même place, pour les applications qui lisent la position de la barre.
 unsafe fn stay_in_front(h: HWND) {
     let explorer = explorer_tray();
     let mut want = RECT::default();
@@ -223,7 +223,7 @@ unsafe extern "system" fn wndproc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
             let cds = &*(lp.0 as *const COPYDATASTRUCT);
             match cds.dwData {
                 1 => on_notify(h, cds),
-                // Shell_NotifyIconGetRect : on repond la position du curseur (icone affichee chez nous).
+                // Shell_NotifyIconGetRect : on renvoie la position du curseur (l'icône est affichée chez nous).
                 3 => return anchor(cds),
                 _ => {}
             }
@@ -235,7 +235,7 @@ unsafe extern "system" fn wndproc(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
         }
         WM_COMMAND => forward(msg, wp, lp),
         m if m != 0 && m == TASKBAR_CREATED.load(Relaxed) => {
-            // Vrai redemarrage d'Explorer : on se replace devant lui puis on redemande les icones.
+            // Vrai redémarrage d'Explorer : on se replace devant lui puis on redemande les icônes.
             let current = explorer_tray().0 as isize;
             if EXPLORER.swap(current, Relaxed) != current {
                 stay_in_front(h);
@@ -297,7 +297,7 @@ unsafe fn on_notify(h: HWND, cds: &COPYDATASTRUCT) {
     let n = (cds.cbData as usize).min(std::mem::size_of::<TrayMessage>());
     std::ptr::copy_nonoverlapping(cds.lpData as *const u8, &mut m as *mut TrayMessage as *mut u8, n);
     if m.signature == SIGNATURE && apply(m.message, &m.data) {
-        // Regroupe les rafales (icones animees, ajout de toutes les icones au demarrage).
+        // Regroupe les rafales (icônes animées, ajout de toutes les icônes au démarrage).
         SetTimer(Some(h), T_PUBLISH, 150, None);
     }
 }
@@ -385,7 +385,7 @@ fn publish_icons() {
     publish(app, "tray", &out);
 }
 
-/// Clic sur une icone, transmis a son application comme le ferait la barre des taches.
+/// Clic sur une icône, transmis à son application comme le ferait la barre des tâches.
 pub fn click(id: &str, button: &str) {
     let found = ICONS
         .lock()
@@ -400,7 +400,7 @@ pub fn click(id: &str, button: &str) {
         }
         let mut pid = 0u32;
         GetWindowThreadProcessId(h, Some(&mut pid));
-        // Autorise l'application a passer au premier plan (son menu doit pouvoir prendre le focus).
+        // Autorise l'application à passer au premier plan (son menu doit pouvoir prendre le focus).
         let _ = AllowSetForegroundWindow(pid);
         let mut p = POINT::default();
         let _ = GetCursorPos(&mut p);

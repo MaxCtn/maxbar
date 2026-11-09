@@ -1,4 +1,4 @@
-//! Utilisation de Claude Code : quota 5 h / 7 j (ecrit par la statusline de Claude Monitor
+//! Utilisation de Claude Code : quota 5 h / 7 j (écrit par la statusline de Claude Monitor
 //! dans ~/.claude/monitor/quota.json), historique pour les deltas, sessions actives.
 
 use std::fs::{File, OpenOptions};
@@ -13,9 +13,9 @@ use tauri::AppHandle;
 use crate::publish;
 
 const ACTIVE_SECS: u64 = 120;
-/// Historique conserve : de quoi calculer la conso du jour et de la derniere fenetre de 5 h.
+/// Historique conservé : de quoi calculer la conso du jour et de la dernière fenêtre de 5 h.
 const KEEP_SECS: i64 = 26 * 3600;
-/// Valeur inchangee : un point toutes les 5 min suffit pour la courbe.
+/// Valeur inchangée : un point toutes les 5 min suffit pour la courbe.
 const IDLE_POINT_SECS: i64 = 300;
 
 #[derive(Serialize, PartialEq)]
@@ -65,7 +65,7 @@ impl History {
                 Some((it.next()?.parse().ok()?, it.next()?.parse().ok()?, it.next()?.parse().ok()?))
             })
             .collect();
-        // Historique de Claude Monitor, s'il existe : de quoi avoir des deltas des le premier lancement.
+        // Historique de Claude Monitor, s'il existe : de quoi avoir des deltas dès le premier lancement.
         let monitor = std::fs::read_to_string(home().join("monitor").join("history.jsonl")).unwrap_or_default();
         rows.extend(monitor.lines().filter_map(|l| {
             let v: Value = serde_json::from_str(l).ok()?;
@@ -78,7 +78,7 @@ impl History {
         h
     }
 
-    /// Ne garde que les changements (plus un point par 5 min) sur 26 h, et reecrit le fichier.
+    /// Ne garde que les changements (plus un point par 5 min) sur 26 h, et réécrit le fichier.
     fn compact(&mut self) {
         let cutoff = now() - KEEP_SECS;
         let mut kept: Vec<(i64, f64, f64)> = Vec::with_capacity(self.rows.len());
@@ -122,8 +122,7 @@ pub fn start(app: AppHandle) {
                 history.push(t as i64, f.used, s.used);
             }
             let cutoff = (now() - KEEP_SECS) as f64;
-            snap.history =
-                history.rows.iter().map(|&(t, a, b)| [t as f64, a, b]).filter(|r| r[0] >= cutoff).collect();
+            snap.history = history.rows.iter().map(|&(t, a, b)| [t as f64, a, b]).filter(|r| r[0] >= cutoff).collect();
             publish(&app, "claude", &snap);
             std::thread::sleep(Duration::from_secs(10));
         }
@@ -132,11 +131,15 @@ pub fn start(app: AppHandle) {
 
 fn snapshot() -> Claude {
     let root = home();
-    let quota: Option<Value> =
-        std::fs::read_to_string(root.join("monitor").join("quota.json")).ok().and_then(|s| serde_json::from_str(&s).ok());
+    let quota: Option<Value> = std::fs::read_to_string(root.join("monitor").join("quota.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
     let window = |name: &str| {
         let w = quota.as_ref()?.get("rate_limits")?.get(name)?;
-        Some(Window { used: w.get("used_percentage")?.as_f64()?, resets_at: w.get("resets_at").and_then(Value::as_i64) })
+        Some(Window {
+            used: w.get("used_percentage")?.as_f64()?,
+            resets_at: w.get("resets_at").and_then(Value::as_i64),
+        })
     };
     Claude {
         five_hour: window("five_hour"),

@@ -29,7 +29,7 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  /* Fenetre transparente : seules la barre et les elements ouverts sont visibles. */
+  /* Fenêtre transparente : seules la barre et les éléments ouverts sont visibles. */
   background: transparent;
   color: var(--text);
   font: 12px/1.25 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -95,12 +95,6 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .edge-bottom .chev svg { transform: rotate(180deg); }
 .edge-bottom .chev.open svg { transform: none; }
 .chev:hover { color: var(--text); }
-.count {
-  position: absolute; top: 3px; right: 1px;
-  min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px;
-  font-size: 8.5px; font-weight: 700; line-height: 13px; text-align: center;
-  background: rgba(255, 255, 255, 0.14); color: var(--text);
-}
 
 /* ---------- dock ---------- */
 #dock { display: flex; align-items: center; height: 100%; gap: 1px; min-width: 0; overflow: hidden; padding: 0 2px; }
@@ -180,12 +174,12 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .delta.crit { color: var(--red); background: rgba(242, 103, 95, 0.18); }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.6); } }
 
-/* Meteo */
+/* Météo */
 .weather { gap: 6px; padding-right: 10px; }
 .wi { width: 22px; height: 22px; flex: none; }
 .wi svg { width: 100%; height: 100%; overflow: visible; }
 
-/* Systeme */
+/* Système */
 .sys { gap: 10px; }
 .cell { display: flex; flex-direction: column; justify-content: center; position: relative; min-width: 30px; }
 .cell .lbl { font-size: 9px; letter-spacing: 0.06em; color: var(--faint); font-weight: 600; }
@@ -198,8 +192,14 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .meter b.warn { background: var(--amber); }
 .meter b.crit { background: var(--red); }
 
-/* Etat : reseau, volume, batterie */
-.status { gap: 7px; padding: 0 9px; }
+/* Clavier */
+.lang { padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+#lang-code { display: inline-block; }
+#lang-code.bump { animation: pop-in 0.35s var(--bounce); }
+
+/* État : réseau, volume, batterie */
+.status { display: flex; align-items: center; flex: none; }
+.si-btn { gap: 6px; padding: 0 8px; }
 .si { width: 16px; height: 16px; color: var(--text); }
 .si svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .si.off { color: var(--faint); }
@@ -212,7 +212,7 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 }
 .peek:hover { background: rgba(255, 255, 255, 0.1); }
 
-/* ============================================================== ilot */
+/* ============================================================== îlot */
 .island {
   position: absolute; z-index: 5;
   left: 50%; width: 120px; height: 32px;
@@ -246,7 +246,6 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .i-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .i-art img:not([src]) { display: none; }
 .i-note { font-size: 11px; color: var(--muted); }
-.island.playing .i-art { animation: none; }
 .i-text { display: flex; align-items: baseline; gap: 6px; max-width: 290px; min-width: 0; }
 .i-text b { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .i-text span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 120px; }
@@ -255,7 +254,7 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .eq i { display: block; width: 2.5px; border-radius: 2px; background: var(--faint); transform-origin: center; transition: background 0.3s, height 0.4s var(--bounce); }
 .eq i:nth-child(1) { height: 6px; } .eq i:nth-child(2) { height: 12px; } .eq i:nth-child(3) { height: 8px; } .eq i:nth-child(4) { height: 11px; }
 .island.playing .eq i { background: var(--green); }
-/* Animee seulement quand l'ilot est deploye (sinon aucune animation permanente). */
+/* Animée seulement quand l'îlot est déployé (sinon aucune animation permanente). */
 .island.playing[data-mode="full"] .eq i { animation: eq 0.9s ease-in-out infinite alternate; }
 .eq i:nth-child(2) { animation-delay: -0.3s !important; } .eq i:nth-child(3) { animation-delay: -0.6s !important; } .eq i:nth-child(4) { animation-delay: -0.15s !important; }
 @keyframes eq { from { transform: scaleY(0.35); } to { transform: scaleY(1); } }
@@ -299,7 +298,7 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .island.toast-claude .t-track b { background: var(--claude); }
 .island.toast-claude.crit .t-track b { background: var(--red); }
 
-/* ============================================================== popovers */
+/* ============================================================== popups */
 .pop {
   position: absolute; z-index: 10; left: 0; top: 0;
   width: 340px; padding: 14px;
@@ -325,7 +324,6 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .p-label { font-size: 12px; color: var(--text); }
 .p-value { font-size: 12px; font-weight: 600; white-space: nowrap; }
 .p-hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
-.p-hint.warn { color: var(--amber); }
 .p-hint.crit { color: var(--red); }
 .p-hint.ok { color: var(--green); }
 .p-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
@@ -340,6 +338,58 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .p-item .meta { color: var(--muted); white-space: nowrap; }
 .live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 0 3px rgba(68, 211, 154, 0.15); }
 .p-empty { color: var(--muted); font-size: 11.5px; padding: 4px 0; }
+.p-sub.link { transition: color 0.15s; }
+.p-sub.link:hover { color: var(--text); }
+.p-section { margin: 14px 0 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.p-foot {
+  display: block; width: 100%; margin-top: 12px; padding: 8px; border-radius: 10px;
+  background: var(--glass-2); color: var(--muted); font-size: 11.5px; text-align: center;
+  transition: background 0.15s, color 0.15s;
+}
+.p-foot:hover { background: var(--hover); color: var(--text); }
+
+/* popup son */
+.dev-list, .kb-list { display: flex; flex-direction: column; gap: 1px; }
+.dev, .kb {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 8px; border-radius: 9px; text-align: left;
+  transition: background 0.15s;
+}
+.dev:hover, .kb:hover { background: var(--hover); }
+.dev .radio {
+  width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 1.5px solid var(--faint);
+  transition: border 0.3s var(--bounce);
+}
+.dev.on .radio { border: 4.5px solid var(--violet); }
+.dev.on .dev-name { font-weight: 600; }
+.dev-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mix-list { display: flex; flex-direction: column; gap: 2px; }
+.mix-row { display: grid; grid-template-columns: 30px 1fr 38px; align-items: center; gap: 8px; }
+.mix-row .p-value { text-align: right; font-size: 11px; color: var(--muted); }
+.app-ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; transition: background 0.15s, opacity 0.2s, transform 0.25s var(--bounce); }
+.app-ico:hover { background: var(--hover); }
+.app-ico:active { transform: scale(0.88); }
+.app-ico img, .app-ico svg { width: 20px; height: 20px; }
+.app-ico svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.mix-row.muted .app-ico { opacity: 0.4; }
+.mix-main { display: flex; flex-direction: column; min-width: 0; }
+.mix-name { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mix-main input[type="range"] { height: 18px; }
+.pop.open .dev, .pop.open .mix-row, .pop.open .kb { animation: rise 0.45s var(--spring) both; animation-delay: calc(var(--i, 0) * 30ms + 40ms); }
+
+/* popup clavier */
+.pop.pop-lang { width: 290px; }
+.kb .code {
+  width: 38px; height: 24px; flex: none; display: grid; place-items: center;
+  border-radius: 7px; background: var(--glass-2);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  transition: background 0.2s, color 0.2s;
+}
+.kb.on .code { background: var(--violet); color: #fff; }
+.kb .txt { display: flex; flex-direction: column; min-width: 0; }
+.kb .txt b { font-weight: 600; }
+.kb .txt span { font-size: 11px; color: var(--muted); }
 
 .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
 .chip-stat { padding: 8px 9px; border-radius: 10px; background: var(--glass-2); }
@@ -395,7 +445,7 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .d-date { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .d-date b { color: var(--text); font-weight: 600; }
 
-/* meteo */
+/* météo */
 .w-now { display: flex; align-items: center; gap: 12px; }
 .w-now .wi { width: 46px; height: 46px; }
 .w-temp { font: 300 34px/1 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
@@ -415,7 +465,6 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .w-d .wi { width: 18px; height: 18px; }
 .w-d .lo { color: var(--muted); text-align: right; }
 .w-d .hi { font-weight: 600; }
-.w-d .pp { font-size: 9.5px; color: var(--blue); }
 .range { position: relative; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); }
 .range b { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: linear-gradient(90deg, var(--blue), var(--amber)); }
 

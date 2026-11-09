@@ -1,4 +1,4 @@
-//! CPU, RAM, GPU, reseau, batterie - echantillonnes toutes les 2 s.
+//! CPU, RAM, GPU, réseau, batterie, échantillonnés toutes les 2 s.
 
 use std::time::{Duration, Instant};
 
@@ -9,8 +9,8 @@ use windows::Win32::Foundation::FILETIME;
 use windows::Win32::NetworkManagement::IpHelper::{FreeMibTable, GetIfTable2, MIB_IF_TABLE2};
 use windows::Win32::NetworkManagement::Ndis::IfOperStatusUp;
 use windows::Win32::System::Performance::{
-    PdhAddEnglishCounterW, PdhCollectQueryData, PdhGetFormattedCounterArrayW, PdhOpenQueryW, PDH_FMT_COUNTERVALUE_ITEM_W,
-    PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY,
+    PdhAddEnglishCounterW, PdhCollectQueryData, PdhGetFormattedCounterArrayW, PdhOpenQueryW,
+    PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY,
 };
 use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
 use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
@@ -50,10 +50,11 @@ pub fn start(app: AppHandle) {
         let gpu = Gpu::open();
         std::thread::sleep(Duration::from_millis(500));
         loop {
-            // En jeu plein ecran : aucune mesure (les compteurs GPU peuvent provoquer des saccades).
+            // En jeu plein écran : aucune mesure (les compteurs GPU peuvent provoquer des saccades).
             if crate::appbar::fullscreen_active() {
                 std::thread::sleep(Duration::from_secs(2));
                 cpu_prev = None;
+                net_prev = (net_bytes(), Instant::now());
                 continue;
             }
             let cpu_now = cpu_times();
@@ -110,7 +111,7 @@ fn memory() -> (f32, f64, f64) {
     (m.dwMemoryLoad as f32, gb(m.ullTotalPhys - m.ullAvailPhys), gb(m.ullTotalPhys))
 }
 
-/// Octets recus/emis cumules sur les interfaces physiques actives (hors filtres et loopback),
+/// Octets reçus/émis cumulés sur les interfaces physiques actives (hors filtres et loopback),
 /// et type de connexion (filaire prioritaire sur le wifi).
 fn net_bytes() -> (u64, u64, &'static str) {
     let mut table: *mut MIB_IF_TABLE2 = std::ptr::null_mut();
@@ -136,7 +137,17 @@ fn net_bytes() -> (u64, u64, &'static str) {
         }
         FreeMibTable(table as *const _);
     }
-    (down, up, if ethernet { "ethernet" } else if wifi { "wifi" } else { "none" })
+    (
+        down,
+        up,
+        if ethernet {
+            "ethernet"
+        } else if wifi {
+            "wifi"
+        } else {
+            "none"
+        },
+    )
 }
 
 fn battery() -> Option<Battery> {
@@ -148,7 +159,7 @@ fn battery() -> Option<Battery> {
     Some(Battery { percent: s.BatteryLifePercent, charging: s.ACLineStatus == 1 })
 }
 
-/// Utilisation 3D du GPU via les compteurs de performance (meme source que le Gestionnaire des taches).
+/// Utilisation 3D du GPU via les compteurs de performance (même source que le Gestionnaire des tâches).
 struct Gpu {
     query: PDH_HQUERY,
     counter: PDH_HCOUNTER,
@@ -162,7 +173,9 @@ impl Gpu {
                 return None;
             }
             let mut counter = PDH_HCOUNTER::default();
-            if PdhAddEnglishCounterW(query, w!("\\GPU Engine(*engtype_3D)\\Utilization Percentage"), 0, &mut counter) != 0 {
+            if PdhAddEnglishCounterW(query, w!("\\GPU Engine(*engtype_3D)\\Utilization Percentage"), 0, &mut counter)
+                != 0
+            {
                 return None;
             }
             PdhCollectQueryData(query);
@@ -176,17 +189,19 @@ impl Gpu {
                 return None;
             }
             let (mut size, mut count) = (0u32, 0u32);
-            if PdhGetFormattedCounterArrayW(self.counter, PDH_FMT_DOUBLE, &mut size, &mut count, None) != PDH_MORE_DATA {
+            if PdhGetFormattedCounterArrayW(self.counter, PDH_FMT_DOUBLE, &mut size, &mut count, None) != PDH_MORE_DATA
+            {
                 return Some(0.0);
             }
-            // u64 pour garantir l'alignement des structures retournees.
+            // u64 pour garantir l'alignement des structures retournées.
             let mut buf = vec![0u64; size as usize / 8 + 1];
             let items = buf.as_mut_ptr() as *mut PDH_FMT_COUNTERVALUE_ITEM_W;
             if PdhGetFormattedCounterArrayW(self.counter, PDH_FMT_DOUBLE, &mut size, &mut count, Some(items)) != 0 {
                 return None;
             }
             let items = std::slice::from_raw_parts(items, count as usize);
-            let total: f64 = items.iter().filter(|i| i.FmtValue.CStatus == 0).map(|i| i.FmtValue.Anonymous.doubleValue).sum();
+            let total: f64 =
+                items.iter().filter(|i| i.FmtValue.CStatus == 0).map(|i| i.FmtValue.Anonymous.doubleValue).sum();
             Some(total.clamp(0.0, 100.0))
         }
     }

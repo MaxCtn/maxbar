@@ -5,6 +5,7 @@ mod audio;
 mod claude;
 mod config;
 mod icons;
+mod keyboard;
 mod media;
 mod stats;
 mod sys;
@@ -23,7 +24,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VIRTUAL_KEY, VK_A, VK_CONTROL, VK_D, VK_ESCAPE, VK_LWIN, VK_N, VK_S, VK_SHIFT, VK_X,
 };
 
-/// Dernier etat publie par chaque source, pour que l'interface demarre avec des donnees.
+/// Dernier état publié par chaque source, pour que l'interface démarre avec des données.
 #[derive(Default)]
 pub struct Store(Mutex<Map<String, Value>>);
 
@@ -37,14 +38,14 @@ struct TrayItems {
     autostart: CheckMenuItem<Wry>,
 }
 
-/// Contexte du dernier menu clic-droit ouvert sur une icone.
+/// Contexte du dernier menu clic droit ouvert sur une icône.
 struct TaskMenu {
     path: String,
     hwnds: Vec<isize>,
 }
 static TASK_MENU: Mutex<Option<TaskMenu>> = Mutex::new(None);
 
-/// Publie un etat vers l'interface, seulement s'il a change.
+/// Publie un état vers l'interface, seulement s'il a changé.
 pub fn publish<T: serde::Serialize>(app: &AppHandle, topic: &str, payload: &T) {
     let Ok(value) = serde_json::to_value(payload) else { return };
     if let Some(store) = app.try_state::<Store>() {
@@ -85,7 +86,7 @@ fn media_control(action: String) {
     media::control(&action);
 }
 
-/// Zones visibles et cliquables en plus de la barre (ilot, panneaux, volet).
+/// Zones visibles et cliquables en plus de la barre (îlot, panneaux, volet).
 #[tauri::command]
 fn set_shapes(shapes: Vec<appbar::Shape>) {
     appbar::set_shapes(shapes);
@@ -106,7 +107,27 @@ fn volume(action: String, value: Option<f32>) {
     }
 }
 
-/// Raccourcis du shell Windows (menu Demarrer, notifications, parametres rapides...).
+#[tauri::command]
+async fn audio_mixer() -> audio::Mixer {
+    audio::mixer()
+}
+
+#[tauri::command]
+async fn audio_output(id: String) {
+    audio::set_output(id);
+}
+
+#[tauri::command]
+async fn app_volume(key: String, level: Option<f32>, mute: Option<bool>) {
+    audio::set_app(key, level, mute.unwrap_or(false));
+}
+
+#[tauri::command]
+fn keyboard_layout(id: isize) {
+    keyboard::select(id);
+}
+
+/// Raccourcis du shell Windows (menu Démarrer, notifications, paramètres rapides...).
 #[tauri::command]
 fn shortcut(name: String) {
     let keys: &[VIRTUAL_KEY] = match name.as_str() {
@@ -119,6 +140,8 @@ fn shortcut(name: String) {
         "taskmgr" => &[VK_CONTROL, VK_SHIFT, VK_ESCAPE],
         "settings" => return sys::open("ms-settings:"),
         "sound" => return sys::open("ms-settings:sound"),
+        "mixer" => return sys::open("ms-settings:apps-volume"),
+        "keyboard" => return sys::open("ms-settings:keyboard"),
         "network" => return sys::open("ms-settings:network"),
         "date" => return sys::open("ms-settings:dateandtime"),
         _ => return,
@@ -127,7 +150,13 @@ fn shortcut(name: String) {
 }
 
 #[tauri::command]
-fn task_menu(app: AppHandle, window: WebviewWindow, path: String, hwnds: Vec<isize>, titles: Vec<String>) -> Result<(), String> {
+fn task_menu(
+    app: AppHandle,
+    window: WebviewWindow,
+    path: String,
+    hwnds: Vec<isize>,
+    titles: Vec<String>,
+) -> Result<(), String> {
     let menu = build_task_menu(&app, &path, &hwnds, &titles).map_err(|e| e.to_string())?;
     *TASK_MENU.lock().unwrap() = Some(TaskMenu { path, hwnds });
     window.popup_menu(&menu).map_err(|e| e.to_string())
@@ -198,7 +227,9 @@ fn on_menu(app: &AppHandle, id: &str) {
         }
         "config" => sys::open(&config::path().to_string_lossy()),
         "reload" => apply_config(app, config::load()),
-        "edge-top" | "edge-bottom" => update_config(app, |c| c.edge = if id == "edge-top" { "top" } else { "bottom" }.into()),
+        "edge-top" | "edge-bottom" => {
+            update_config(app, |c| c.edge = if id == "edge-top" { "top" } else { "bottom" }.into())
+        }
         "hide-taskbar" => {
             appbar::set_taskbar_autohide(!appbar::taskbar_autohide());
             sync_tray(app);
@@ -239,7 +270,8 @@ fn on_menu(app: &AppHandle, id: &str) {
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let cfg = current_config(app.handle());
     let top = CheckMenuItem::with_id(app, "edge-top", "Barre en haut de l'écran", true, !cfg.bottom(), None::<&str>)?;
-    let bottom = CheckMenuItem::with_id(app, "edge-bottom", "Barre en bas de l'écran", true, cfg.bottom(), None::<&str>)?;
+    let bottom =
+        CheckMenuItem::with_id(app, "edge-bottom", "Barre en bas de l'écran", true, cfg.bottom(), None::<&str>)?;
     let hide_taskbar = CheckMenuItem::with_id(
         app,
         "hide-taskbar",
@@ -257,8 +289,14 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let import = MenuItem::with_id(app, "import-pins", "Réimporter les épingles de Windows", true, None::<&str>)?;
-    let autostart =
-        CheckMenuItem::with_id(app, "autostart", "Lancer au démarrage de Windows", true, sys::autostart_enabled(), None::<&str>)?;
+    let autostart = CheckMenuItem::with_id(
+        app,
+        "autostart",
+        "Lancer au démarrage de Windows",
+        true,
+        sys::autostart_enabled(),
+        None::<&str>,
+    )?;
     let edit = MenuItem::with_id(app, "config", "Modifier la configuration…", true, None::<&str>)?;
     let reload = MenuItem::with_id(app, "reload", "Recharger la configuration", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quitter maxbar", true, None::<&str>)?;
@@ -277,7 +315,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Demande a WebView2 de garder une empreinte memoire minimale (caches reduits).
+/// Demande à WebView2 de garder une empreinte mémoire minimale (caches réduits).
 fn low_memory(win: &WebviewWindow) {
     use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW};
     use windows::core::Interface;
@@ -294,8 +332,12 @@ fn main() {
     if !sys::single_instance() {
         return;
     }
-    // Ne jamais laisser une bande d'ecran reservee (ni la barre Windows cachee) si l'app plante.
-    std::panic::set_hook(Box::new(|_| appbar::remove()));
+    // Ne jamais laisser une bande d'écran réservée (ni la barre Windows cachée) si l'app plante.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        appbar::remove();
+        default_hook(info);
+    }));
 
     let cfg = config::load();
     tauri::Builder::default()
@@ -309,10 +351,14 @@ fn main() {
             set_shapes,
             tray_click,
             volume,
+            audio_mixer,
+            audio_output,
+            app_volume,
+            keyboard_layout,
             shortcut,
             task_menu
         ])
-        // Alt+F4 sur la barre ne doit pas la fermer : on quitte via l'icone de notification.
+        // Alt+F4 sur la barre ne doit pas la fermer : on quitte via l'icône de notification.
         .on_window_event(|_, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -331,6 +377,7 @@ fn main() {
             media::start(handle.clone());
             stats::start(handle.clone());
             audio::start(handle.clone());
+            keyboard::start(handle.clone());
             weather::start(handle.clone());
             if cfg.tray {
                 tray::start(handle.clone());
@@ -343,7 +390,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("maxbar : demarrage impossible")
+        .expect("maxbar : démarrage impossible")
         .run(|_, event| {
             if let tauri::RunEvent::Exit = event {
                 appbar::remove();

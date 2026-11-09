@@ -1734,6 +1734,7 @@ dependencies = [
  "tauri-build",
  "webview2-com",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

@@ -21,9 +21,7 @@
 
       <div class="zone right">
         <button id="tray-btn" class="icon-btn chev" aria-label="Icônes cachées" title="Icônes cachées">
-          <svg viewBox="0 0 20 20" aria-hidden="true" class="stroke"><path d="m6 11.5 4-4 4 4"/></svg>
-          <span id="tray-count" class="count" hidden></span>
-        </button>
+          <svg viewBox="0 0 20 20" aria-hidden="true" class="stroke"><path d="m6 11.5 4-4 4 4"/></svg>        </button>
         <div id="claude" class="widget claude" role="button" tabindex="0">
           <svg class="ring" viewBox="0 0 36 36" aria-hidden="true"><circle class="track" cx="18" cy="18" r="14"/><circle id="claude-ring" class="value" cx="18" cy="18" r="14"/></svg>
           <div class="stack">
@@ -41,10 +39,17 @@
           <div class="cell" id="gpu-cell"><span class="lbl">GPU</span><span id="gpu" class="val">–</span><i class="meter"><b id="gpu-m"></b></i></div>
           <div class="cell net"><span id="down" class="val sm">↓ –</span><span id="up" class="val sm">↑ –</span></div>
         </div>
-        <div id="status" class="widget status" role="button" tabindex="0" title="Paramètres rapides — molette : volume">
-          <span id="net-icon" class="si"></span>
-          <span id="vol-icon" class="si"></span>
-          <span id="bat" class="bat" hidden></span>
+        <div id="lang" class="widget lang" role="button" tabindex="0" title="Disposition du clavier" hidden>
+          <span id="lang-code"></span>
+        </div>
+        <div id="status" class="status">
+          <button id="net-btn" class="widget si-btn" title="Paramètres rapides">
+            <span id="net-icon" class="si"></span>
+            <span id="bat" class="bat" hidden></span>
+          </button>
+          <button id="vol-btn" class="widget si-btn" title="Son — molette : volume">
+            <span id="vol-icon" class="si"></span>
+          </button>
         </div>
         <div id="clock" class="widget clock" role="button" tabindex="0" title="Agenda, météo et réglages">
           <span id="time" class="t1">--:--</span><span id="date" class="t2"></span>

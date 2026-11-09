@@ -1,4 +1,4 @@
-//! Meteo via Open-Meteo (gratuit, sans cle). Position : ville de la config, sinon geolocalisation IP.
+//! Météo via Open-Meteo (gratuit, sans clé). Position : ville de la config, sinon géolocalisation IP.
 
 use std::os::windows::process::CommandExt;
 use std::process::Command;
@@ -24,7 +24,7 @@ struct Place {
     name: String,
 }
 
-/// Relance une mise a jour (ex. ville modifiee dans la config).
+/// Relance une mise à jour (ex. ville modifiée dans la config).
 pub fn poke() {
     if let Some(tx) = TX.get() {
         let _ = tx.send(());
@@ -57,7 +57,7 @@ pub fn start(app: AppHandle) {
     });
 }
 
-/// Requete via curl.exe (fourni avec Windows) : le client HTTP WinRT echoue en TLS sur Open-Meteo.
+/// Requête via curl.exe (fourni avec Windows) : le client HTTP WinRT échoue en TLS sur Open-Meteo.
 fn get(url: &str) -> Option<Value> {
     let out = Command::new("curl.exe")
         .args(["-sSL", "--max-time", "15", "-A", "maxbar/0.2", url])

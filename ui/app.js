@@ -3,21 +3,21 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
-const TOPICS = ['config', 'geometry', 'pins', 'tasks', 'apps', 'media', 'art', 'stats', 'claude', 'weather', 'volume', 'tray'];
+const TOPICS = ['config', 'geometry', 'pins', 'tasks', 'apps', 'media', 'art', 'stats', 'claude', 'weather', 'volume', 'keyboard', 'tray'];
 const EMPTY = { pins: [], tasks: { windows: [], active: 0 }, apps: {}, tray: [] };
 const S = {
   config: null, geometry: null, pins: [], tasks: EMPTY.tasks, apps: {}, media: null, art: null,
-  stats: null, claude: null, weather: null, volume: null, tray: [],
+  stats: null, claude: null, weather: null, volume: null, keyboard: null, tray: [],
 };
 const $ = (id) => document.getElementById(id);
 const root = $('root');
-const HISTORY = 90; // 3 min d'historique a 2 s
+const HISTORY = 90; // 3 min d'historique à 2 s
 const hist = { cpu: [], ram: [], gpu: [] };
-/** Marge de region autour des surfaces flottantes, pour leur ombre (fenetre transparente). */
+/** Marge de région autour des surfaces flottantes, pour leur ombre (fenêtre transparente). */
 const SHADOW = 22;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// ================================================================== helpers
+// ================================================================= utilitaires
 function h(tag, props, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -35,7 +35,7 @@ const svg = (tag, attrs) => {
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   return el;
 };
-/** Icone a partir d'un balisage SVG constant (jamais de donnees externes). */
+/** Icône à partir d'un balisage SVG constant (jamais de données externes). */
 function icon(markup) {
   const t = document.createElement('template');
   t.innerHTML = markup.trim();
@@ -46,10 +46,26 @@ function setIcon(el, markup) {
   el._markup = markup;
   el.replaceChildren(icon(markup));
 }
-/** N'ecrit dans le DOM que si le texte change (evite des redessins inutiles). */
+/** N'écrit dans le DOM que si le texte change (évite des redessins inutiles). */
 function setText(id, text) {
   const el = typeof id === 'string' ? $(id) : id;
   if (el.textContent !== text) el.textContent = text;
+}
+/** Au plus un appel tous les `ms`, le dernier étant toujours envoyé (glissement d'un curseur). */
+function throttle(fn, ms) {
+  let last = 0;
+  let timer = 0;
+  let args = null;
+  return (...a) => {
+    args = a;
+    const wait = last + ms - Date.now();
+    if (wait <= 0) {
+      last = Date.now();
+      fn(...args);
+    } else if (!timer) {
+      timer = setTimeout(() => { timer = 0; last = Date.now(); fn(...args); }, wait);
+    }
+  };
 }
 const level = (p) => (p >= 85 ? 'crit' : p >= 60 ? 'warn' : '');
 const pct = (p) => `${Math.round(p)} %`;
@@ -78,7 +94,7 @@ function hue(str) {
   return Math.abs(x) % 360;
 }
 
-// ================================================================ icones
+// ====================================================================== icônes
 const I = {
   speaker: (v) => {
     const base = '<path d="M3.5 7.6h2.9l4.1-3.4v11.6l-4.1-3.4H3.5z"/>';
@@ -99,7 +115,7 @@ const I = {
   claude: '<svg viewBox="0 0 20 20"><path d="M10 3v14M3 10h14M5 5l10 10M15 5 5 15"/></svg>',
 };
 
-/** Codes meteo WMO -> libelle et famille d'icone. */
+/** Codes météo WMO -> libellé et famille d'icône. */
 const WMO = {
   0: ['Ciel dégagé', 'clear'], 1: ['Plutôt dégagé', 'partly'], 2: ['Partiellement nuageux', 'partly'], 3: ['Couvert', 'cloud'],
   45: ['Brouillard', 'fog'], 48: ['Brouillard givrant', 'fog'],
@@ -141,7 +157,7 @@ function weatherSvg(code, day = true) {
   return `<svg viewBox="0 0 24 24">${body}</svg>`;
 }
 
-// ================================================================= geometrie
+// =================================================================== géométrie
 function geom() {
   return S.geometry || { bar_top: 0, bar_height: S.config?.height || 42, bottom: S.config?.edge === 'bottom' };
 }
@@ -157,7 +173,7 @@ function applyGeometry() {
   if (pop.name) placePop();
 }
 
-// Regions : la fenetre couvre l'ecran, seules ces zones (et la barre) sont visibles et cliquables.
+// Régions : la fenêtre couvre l'écran, seules ces zones (et la barre) sont visibles et cliquables.
 const shapes = new Map();
 let shapesKey = '';
 function rectOf(el) {
@@ -173,7 +189,7 @@ function setShape(name, rect) {
   return invoke('set_shapes', { shapes: list }).catch(() => {});
 }
 
-// ====================================================================== dock
+// ======================================================================== dock
 const dockEls = new Map();
 const seenOrder = [];
 let dockReady = false;
@@ -273,7 +289,7 @@ function onAppClick(item, el) {
   invoke('activate', { hwnd: (i < 0 ? wins[0] : wins[(i + 1) % wins.length]).hwnd });
 }
 
-// ================================================================== ilot
+// ======================================================================== îlot
 const island = { mode: 'hidden', expanded: false, peek: false, peekTimer: 0, toast: null, toastTimer: 0, shapeTimer: 0 };
 let lastTrack = null;
 let lastRatio = 0;
@@ -333,7 +349,7 @@ function collapseIsland() {
   layoutIsland();
 }
 
-/** Changement de morceau : l'ilot s'ouvre quelques secondes, comme une notification. */
+/** Changement de morceau : l'îlot s'ouvre quelques secondes, comme une notification. */
 function peekIsland() {
   if (pop.name || drawer.open || island.expanded) return;
   island.expanded = true;
@@ -361,7 +377,7 @@ function showToast(t, ms = 1500) {
   }, ms);
 }
 
-// ================================================================== media
+// ======================================================================= média
 function mediaPosition() {
   const m = S.media;
   if (!m) return 0;
@@ -414,20 +430,20 @@ function tickMedia() {
   const m = S.media;
   const ratio = m && m.duration_ms > 0 ? clamp(mediaPosition() / m.duration_ms, 0, 1) : 0;
   const bar = $('i-bar');
-  // Progression continue (transition lineaire d'1 s entre deux mises a jour), sans saut arriere anime.
+  // Progression continue (transition linéaire d'1 s entre deux mises à jour), sans saut arrière animé.
   bar.style.transition = ratio < lastRatio || !m?.playing ? 'none' : '';
   bar.style.transform = `scaleX(${ratio})`;
   lastRatio = ratio;
   setText('i-pos', mmss(mediaPosition()));
 }
 
-// ================================================================= claude
+// ====================================================================== claude
 function claudeCalc() {
   const c = S.claude;
   if (!c) return null;
   const rows = c.history || [];
   const now = Date.now() / 1000;
-  // Conso = somme des hausses (une baisse = remise a zero de la fenetre, ignoree).
+  // Conso = somme des hausses (une baisse = remise à zéro de la fenêtre, ignorée).
   const consumed = (idx, since) => {
     let sum = 0;
     let prev = null;
@@ -440,7 +456,7 @@ function claudeCalc() {
   };
   const five = c.five_hour;
   const week = c.seven_day;
-  // La conso 5 h ne compte que la fenetre en cours (avant la remise a zero, c'est une autre fenetre).
+  // La conso 5 h ne compte que la fenêtre en cours (avant la remise à zéro, c'est une autre fenêtre).
   const start = five?.resets_at ? five.resets_at - 5 * 3600 : 0;
   const d15 = consumed(1, Math.max(start, now - 900));
   const d30 = consumed(1, Math.max(start, now - 1800));
@@ -480,7 +496,7 @@ function renderClaude() {
   el.title = five
     ? `Claude — 5 h : ${pct(five.used)}${show ? ` (${signed(k.d1h)} sur 1 h)` : ''} · 7 j : ${week ? pct(week.used) : '–'}`
     : 'Claude — aucune donnée de quota pour le moment';
-  // Alerte dans l'ilot au franchissement de 80 % puis 95 %.
+  // Alerte dans l'îlot au franchissement de 80 % puis 95 %.
   if (five && lastFive != null) {
     for (const seuil of [80, 95]) {
       if (lastFive < seuil && five.used >= seuil) {
@@ -500,7 +516,7 @@ function claudeSpark(k) {
   const used = k.five?.used ?? 0;
   const left = k.resetIn != null ? Math.max(k.resetIn, 0) / 3600 : 0;
   const proj = k.rate > 0 ? clamp(used + k.rate * left, 0, 100) : used;
-  // Echelle adaptative : 3 % ne doit pas etre un trait plat colle au bas du graphe.
+  // Échelle adaptative : 3 % ne doit pas être un trait plat collé au bas du graphe.
   const top = clamp(Math.max(...rows.map((r) => r[1]), proj, used) * 1.25, 20, 100);
   const y = (v) => (96 - (clamp(v, 0, 100) / top) * 90).toFixed(1);
   s.append(svg('line', { class: 'track', x1: 0, y1: 96, x2: 300, y2: 96 }));
@@ -512,7 +528,7 @@ function claudeSpark(k) {
     s.append(svg('polygon', { points: `${pts[0][0]},96 ${line} ${nowPt[0]},96`, fill: 'var(--claude)' }));
     s.append(svg('polyline', { points: line, stroke: 'var(--claude)' }));
     if (left > 0) s.append(svg('polyline', { class: 'proj', points: `${nowPt.join(',')} 300,${y(proj)}`, stroke: 'var(--claude)' }));
-    // Point "maintenant" : ligne de longueur nulle a bout rond (reste rond malgre preserveAspectRatio=none).
+    // Point "maintenant" : ligne de longueur nulle à bout rond (reste rond malgré preserveAspectRatio=none).
     s.append(svg('line', { class: 'now', x1: nowPt[0], y1: nowPt[1], x2: nowPt[0], y2: nowPt[1], stroke: 'var(--claude)' }));
   }
   return s;
@@ -570,7 +586,7 @@ function claudePanel() {
   ];
 }
 
-// ================================================================= systeme
+// ===================================================================== système
 function meter(id, value) {
   const b = $(id);
   const t = `scaleX(${clamp(value / 100, 0, 1)})`;
@@ -636,7 +652,7 @@ function sysPanel() {
   ];
 }
 
-// ================================================================== volume
+// ====================================================================== volume
 let lastVol = null;
 let volTouched = 0;
 
@@ -645,15 +661,193 @@ function renderVolume() {
   const el = $('vol-icon');
   setIcon(el, I.speaker(v));
   el.classList.toggle('off', !v || v.muted);
-  el.title = v ? (v.muted ? 'Son coupé' : `Volume ${v.level} %`) : 'Aucune sortie audio';
-  if (lastVol && v && (v.level !== lastVol.level || v.muted !== lastVol.muted) && Date.now() - volTouched > 900 && island.mode !== 'full') {
+  $('vol-btn').title = v ? `${v.muted ? 'Son coupé' : `Volume ${v.level} %`} — molette : volume` : 'Aucune sortie audio';
+  const changed = lastVol && v && (v.level !== lastVol.level || v.muted !== lastVol.muted);
+  // Toast seulement pour un changement venu d'ailleurs (touches multimédia, autre app).
+  if (changed && Date.now() - volTouched > 900 && island.mode !== 'full' && pop.name !== 'sound') {
     showToast({ icon: I.speaker(v), label: v.muted ? 'Son coupé' : 'Volume', value: v.muted ? 0 : v.level, text: v.muted ? '' : String(v.level) }, 1400);
   }
   lastVol = v;
-  updateDrawerVolume();
+  updateMasterRows();
 }
 
-// ================================================================== meteo
+/** Curseur 0-100 qui ne se laisse pas écraser par les mises à jour pendant qu'on le fait glisser. */
+function slider(label, onInput) {
+  const r = h('input', { type: 'range', min: '0', max: '100', step: '1', 'aria-label': label });
+  r.addEventListener('input', () => {
+    r._touched = Date.now();
+    r.style.setProperty('--v', `${r.value}%`);
+    onInput(Number(r.value));
+  });
+  return r;
+}
+
+function setSlider(r, value, muted) {
+  r.classList.toggle('muted', !!muted);
+  if (Date.now() - (r._touched || 0) < 700) return;
+  r.value = String(value);
+  r.style.setProperty('--v', `${value}%`);
+}
+
+// Curseurs du volume général (volet et popup son).
+const masterRows = new Set();
+
+function masterRow() {
+  const value = h('span', { class: 'p-value' });
+  const mute = h('button', {
+    class: 'icon-btn', 'aria-label': 'Couper le son',
+    onclick: () => { volTouched = Date.now(); invoke('volume', { action: 'mute' }); },
+  });
+  const range = slider('Volume', (v) => {
+    volTouched = Date.now();
+    setText(value, `${v} %`);
+    invoke('volume', { action: 'set', value: v / 100 });
+  });
+  const row = h('div', { class: 'vol-row' }, mute, range, value);
+  row._parts = { mute, range, value };
+  masterRows.add(row);
+  updateMasterRow(row);
+  return row;
+}
+
+function updateMasterRow(row) {
+  const v = S.volume;
+  const { mute, range, value } = row._parts;
+  setIcon(mute, I.speaker(v));
+  range.disabled = !v;
+  if (!v) return;
+  setSlider(range, v.level, v.muted);
+  if (Date.now() - (range._touched || 0) > 700) setText(value, v.muted ? 'muet' : `${v.level} %`);
+}
+
+function updateMasterRows() {
+  for (const row of masterRows) {
+    if (row.isConnected) updateMasterRow(row);
+    else masterRows.delete(row);
+  }
+}
+
+// ------------------------------------------------------------------- popup son
+const mixer = { data: null, key: '', timer: 0 };
+const sendAppVolume = throttle((key, level) => invoke('app_volume', { key, level }), 60);
+
+function mixerKey(d) {
+  return d ? JSON.stringify([d.devices.map((x) => [x.id, x.default]), d.apps.map((a) => a.key)]) : '';
+}
+
+async function refreshMixer() {
+  let data;
+  try { data = await invoke('audio_mixer'); } catch { return; }
+  mixer.data = data;
+  if (pop.name !== 'sound') return;
+  const key = mixerKey(data);
+  if (key === mixer.key) return updateAppRows();
+  mixer.key = key;
+  renderPop();
+  setShape('pop', rectOf($('panel')));
+}
+
+function startMixer() {
+  clearInterval(mixer.timer);
+  refreshMixer();
+  mixer.timer = setInterval(refreshMixer, 1500);
+}
+
+function stopMixer() {
+  clearInterval(mixer.timer);
+}
+
+function selectOutput(dev) {
+  if (dev.default) return;
+  for (const d of mixer.data.devices) d.default = d === dev;
+  mixer.key = mixerKey(mixer.data);
+  document.querySelectorAll('#panel .dev').forEach((b, i) => b.classList.toggle('on', mixer.data.devices[i] === dev));
+  invoke('audio_output', { id: dev.id }).then(refreshMixer);
+}
+
+function appRow(a, i) {
+  const value = h('span', { class: 'p-value' });
+  const ico = h('button', {
+    class: 'app-ico', title: 'Couper / rétablir',
+    onclick: () => invoke('app_volume', { key: a.key, mute: true }).then(refreshMixer),
+  }, a.icon ? h('img', { src: a.icon, alt: '' }) : icon(I.speaker({ level: 60 })));
+  const range = slider(`Volume de ${a.name}`, (v) => {
+    setText(value, `${v} %`);
+    sendAppVolume(a.key, v / 100);
+  });
+  const row = h('div', { class: 'mix-row', 'data-key': a.key, style: `--i:${i}` },
+    ico, h('div', { class: 'mix-main' }, h('span', { class: 'mix-name' }, a.name), range), value);
+  row._parts = { range, value };
+  updateAppRow(row, a);
+  return row;
+}
+
+function updateAppRow(row, a) {
+  const { range, value } = row._parts;
+  row.classList.toggle('muted', a.muted);
+  setSlider(range, a.level, a.muted);
+  if (Date.now() - (range._touched || 0) > 700) setText(value, a.muted ? 'muet' : `${a.level} %`);
+}
+
+function updateAppRows() {
+  for (const a of mixer.data?.apps || []) {
+    const row = document.querySelector(`.mix-row[data-key="${CSS.escape(a.key)}"]`);
+    if (row) updateAppRow(row, a);
+  }
+}
+
+function soundPanel() {
+  const d = mixer.data;
+  const link = (label, name) => h('button', { class: 'p-sub link', onclick: () => { closeAll(); invoke('shortcut', { name }); } }, label);
+  return [
+    h('div', { class: 'p-head' }, h('span', { class: 'p-title' }, 'Son'), link('Paramètres ›', 'sound')),
+    masterRow(),
+    d && d.devices.length > 0 && [
+      h('div', { class: 'p-section' }, 'Sortie'),
+      h('div', { class: 'dev-list' }, d.devices.map((dev, i) => h('button', {
+        class: `dev${dev.default ? ' on' : ''}`, style: `--i:${i}`, onclick: () => selectOutput(dev),
+      }, h('i', { class: 'radio' }), h('span', { class: 'dev-name' }, dev.name)))),
+    ],
+    d && d.apps.length > 0 && [
+      h('div', { class: 'p-section' }, 'Applications'),
+      h('div', { class: 'mix-list' }, d.apps.map(appRow)),
+    ],
+    !d && h('div', { class: 'p-empty' }, 'Lecture des périphériques audio…'),
+    h('button', { class: 'p-foot', onclick: () => { closeAll(); invoke('shortcut', { name: 'mixer' }); } }, 'Mélangeur de volume Windows ›'),
+  ];
+}
+
+// ===================================================================== clavier
+function renderKeyboard() {
+  const k = S.keyboard;
+  const el = $('lang');
+  const cur = k?.layouts.find((l) => l.id === k.current);
+  el.hidden = !cur;
+  if (!cur) return;
+  const code = $('lang-code');
+  if (code.textContent !== cur.code) {
+    code.textContent = cur.code;
+    code.classList.remove('bump');
+    void code.offsetWidth; // relance l'animation
+    code.classList.add('bump');
+  }
+  el.title = `${cur.name}${cur.detail ? ` — clavier ${cur.detail}` : ''}`;
+}
+
+function langPanel() {
+  const k = S.keyboard;
+  if (!k) return [];
+  return [
+    h('div', { class: 'p-head' }, h('span', { class: 'p-title' }, 'Clavier'), h('span', { class: 'p-sub' }, 'Win + Espace')),
+    h('div', { class: 'kb-list' }, k.layouts.map((l, i) => h('button', {
+      class: `kb${l.id === k.current ? ' on' : ''}`, style: `--i:${i}`,
+      onclick: () => { invoke('keyboard_layout', { id: l.id }); closePop(); },
+    }, h('span', { class: 'code' }, l.code), h('span', { class: 'txt' }, h('b', {}, l.name || l.code), l.detail && h('span', {}, l.detail))))),
+    h('button', { class: 'p-foot', onclick: () => { closeAll(); invoke('shortcut', { name: 'keyboard' }); } }, 'Langues et claviers ›'),
+  ];
+}
+
+// ======================================================================= météo
 function weatherNow() {
   const d = S.weather?.data;
   return d?.current ? d : null;
@@ -686,9 +880,9 @@ function weatherCard() {
       h('span', { class: 'pp' }, H.precipitation_probability?.[i] >= 20 ? `${H.precipitation_probability[i]} %` : '')));
   }
   const D = d.daily || {};
-  const n = Math.min(6, (D.time || []).length);
-  const lo = Math.min(...D.temperature_2m_min.slice(0, n));
-  const hi = Math.max(...D.temperature_2m_max.slice(0, n));
+  const n = D.temperature_2m_min && D.temperature_2m_max ? Math.min(6, (D.time || []).length) : 0;
+  const lo = n ? Math.min(...D.temperature_2m_min.slice(0, n)) : 0;
+  const hi = n ? Math.max(...D.temperature_2m_max.slice(0, n)) : 0;
   const span = Math.max(1, hi - lo);
   const dayFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'long' });
   const days = [];
@@ -719,7 +913,7 @@ function weatherCard() {
   ];
 }
 
-// =================================================================== tray
+// ======================================================== zone de notification
 const trayEls = new Map();
 const trayGrid = h('div', { class: 'tray-grid' });
 
@@ -758,10 +952,11 @@ function trayPanel() {
   return [trayGrid];
 }
 
-// ================================================================ popovers
+// ====================================================================== popups
 const pop = { name: null, anchor: null, timer: 0 };
-const POPS = { claude: claudePanel, sys: sysPanel, tray: trayPanel };
-const POP_DEPS = { claude: ['claude'], sys: ['stats'], tray: ['tray', 'config'] };
+const POPS = { claude: claudePanel, sys: sysPanel, tray: trayPanel, sound: soundPanel, lang: langPanel };
+// Sujets qui redessinent chaque popup (le popup son se met à jour sur place, voir refreshMixer).
+const POP_DEPS = { claude: ['claude'], sys: ['stats'], tray: ['tray', 'config'], sound: [], lang: ['keyboard'] };
 
 function renderPop() {
   const el = $('panel');
@@ -783,6 +978,7 @@ function placePop() {
 
 async function openPop(name, anchor) {
   if (pop.name === name) return closePop();
+  stopMixer();
   closeDrawer();
   collapseIsland();
   const el = $('panel');
@@ -793,13 +989,16 @@ async function openPop(name, anchor) {
   anchor.classList.add('open');
   el.classList.remove('open');
   el.className = `pop pop-${name}`;
+  if (name === 'sound') mixer.key = mixerKey(mixer.data);
   renderPop();
   await setShape('pop', rectOf(el));
   if (pop.name === name) requestAnimationFrame(() => el.classList.add('open'));
+  if (name === 'sound') startMixer();
 }
 
 function closePop() {
   if (!pop.name) return;
+  stopMixer();
   const el = $('panel');
   pop.anchor.classList.remove('open');
   pop.name = null;
@@ -819,7 +1018,7 @@ async function refreshPop(topic) {
   await setShape('pop', rectOf($('panel')));
 }
 
-// ================================================================== volet
+// ======================================================================= volet
 const drawer = { open: false, timer: 0, month: null, tick: 0 };
 const fmtLong = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 const fmtMonth = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
@@ -879,39 +1078,12 @@ function calendarCard() {
 }
 
 function soundCard() {
-  const v = S.volume;
-  const range = h('input', { type: 'range', id: 'd-vol', min: '0', max: '100', step: '1', 'aria-label': 'Volume' });
-  range.addEventListener('input', () => {
-    volTouched = Date.now();
-    range.style.setProperty('--v', `${range.value}%`);
-    setText('d-vol-v', `${range.value} %`);
-    invoke('volume', { action: 'set', value: Number(range.value) / 100 });
-  });
-  const mute = h('button', { class: 'icon-btn', id: 'd-mute', 'aria-label': 'Couper le son', onclick: () => { volTouched = Date.now(); invoke('volume', { action: 'mute' }); } });
-  const card = [
+  return [
     h('div', { class: 'p-head' },
       h('span', { class: 'p-title' }, 'Son'),
-      h('button', { class: 'p-sub', onclick: () => { closeAll(); invoke('shortcut', { name: 'sound' }); } }, 'Paramètres audio ›')),
-    h('div', { class: 'vol-row' }, mute, range, h('span', { class: 'p-value', id: 'd-vol-v' }, v ? `${v.level} %` : '–')),
+      h('button', { class: 'p-sub link', onclick: () => openPop('sound', $('vol-btn')) }, 'Sortie et applications ›')),
+    masterRow(),
   ];
-  queueMicrotask(updateDrawerVolume);
-  return card;
-}
-
-function updateDrawerVolume() {
-  const range = document.getElementById('d-vol');
-  if (!range) return;
-  const v = S.volume;
-  const mute = $('d-mute');
-  setIcon(mute, I.speaker(v));
-  range.disabled = !v;
-  range.classList.toggle('muted', !!v?.muted);
-  // Pas de mise a jour pendant que l'utilisateur fait glisser le curseur.
-  if (v && Date.now() - volTouched > 600) {
-    range.value = String(v.level);
-    range.style.setProperty('--v', `${v.level}%`);
-    setText('d-vol-v', v.muted ? 'muet' : `${v.level} %`);
-  }
 }
 
 function actionsSection() {
@@ -990,7 +1162,6 @@ function closeDrawer() {
 function refreshDrawer(topic) {
   if (!drawer.open) return;
   const map = { weather: ['d-weather', weatherCard], claude: ['d-claude', claudeCard] };
-  if (topic === 'volume') return updateDrawerVolume();
   const m = map[topic];
   const node = m && document.getElementById(m[0]);
   if (!node) return;
@@ -1004,7 +1175,7 @@ function closeAll() {
   collapseIsland();
 }
 
-// =================================================================== horloge
+// ===================================================================== horloge
 const fmtTime = () => new Intl.DateTimeFormat('fr-FR', S.config?.clock_seconds
   ? { hour: '2-digit', minute: '2-digit', second: '2-digit' } : { hour: '2-digit', minute: '2-digit' });
 const fmtDate = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -1018,7 +1189,7 @@ function tickClock() {
   clockTimer = setTimeout(tickClock, step - (now.getTime() % step) + 20);
 }
 
-// ================================================================= evenements
+// ================================================================== événements
 function applyConfig() {
   const c = S.config;
   if (!c) return;
@@ -1039,6 +1210,7 @@ const RENDER = {
   claude: renderClaude,
   weather: renderWeather,
   volume: renderVolume,
+  keyboard: renderKeyboard,
   tray: () => {},
 };
 
@@ -1060,12 +1232,15 @@ function wire() {
   $('weather').addEventListener('click', openDrawer);
   $('clock').addEventListener('click', openDrawer);
   $('clock').addEventListener('contextmenu', (e) => { e.preventDefault(); closeAll(); invoke('shortcut', { name: 'notifications' }); });
-  $('status').addEventListener('click', () => { closeAll(); invoke('shortcut', { name: 'quick' }); });
+  $('net-btn').addEventListener('click', () => { closeAll(); invoke('shortcut', { name: 'quick' }); });
+  $('vol-btn').addEventListener('click', () => openPop('sound', $('vol-btn')));
+  $('vol-btn').addEventListener('contextmenu', (e) => { e.preventDefault(); closeAll(); invoke('shortcut', { name: 'mixer' }); });
+  $('lang').addEventListener('click', () => openPop('lang', $('lang')));
   $('status').addEventListener('wheel', (e) => {
     e.preventDefault();
     invoke('volume', { action: 'step', value: e.deltaY < 0 ? 0.02 : -0.02 });
   }, { passive: false });
-  for (const id of ['claude', 'sys', 'weather', 'clock', 'status']) {
+  for (const id of ['claude', 'sys', 'weather', 'clock', 'lang']) {
     $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
   }
 
@@ -1092,7 +1267,7 @@ function wire() {
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('blur', closeAll);
   window.addEventListener('resize', () => { layoutIsland(); if (pop.name) placePop(); });
-  // Progression du morceau : uniquement quand l'ilot est deploye et qu'une lecture est en cours.
+  // Progression du morceau : uniquement quand l'îlot est déployé et qu'une lecture est en cours.
   setInterval(() => { if (island.mode === 'full' && S.media?.playing) tickMedia(); }, 1000);
 }
 

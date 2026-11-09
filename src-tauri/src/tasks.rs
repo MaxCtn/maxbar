@@ -1,4 +1,4 @@
-//! Fenetres ouvertes (equivalent barre des taches), pilote par evenements Windows.
+//! Fenêtres ouvertes (équivalent de la barre des tâches), suivies via les événements Windows.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
@@ -16,20 +16,20 @@ use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, STGM_READ,
 };
-use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_MENU;
+use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, EnumChildWindows, EnumWindows, GetAncestor, GetForegroundWindow, GetMessageW, GetWindow,
     GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
     PostMessageW, SetForegroundWindow, ShowWindow, TranslateMessage, CHILDID_SELF, EVENT_OBJECT_CLOAKED,
-    EVENT_OBJECT_CREATE, EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_UNCLOAKED,
-    EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART, GA_ROOT, GWL_EXSTYLE, GW_OWNER,
-    MSG, OBJID_WINDOW, SW_MINIMIZE, SW_RESTORE, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_CLOSE,
-    WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    EVENT_OBJECT_CREATE, EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_SHOW,
+    EVENT_OBJECT_UNCLOAKED, EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART,
+    EVENT_SYSTEM_MOVESIZEEND, GA_ROOT, GWL_EXSTYLE, GW_OWNER, MSG, OBJID_WINDOW, SW_MINIMIZE, SW_RESTORE,
+    WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_CLOSE, WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 use crate::{appbar, icons, publish, sys, ConfigState};
@@ -55,7 +55,7 @@ struct AppInfo {
     icon: Option<String>,
 }
 
-/// Epingle : `path` sert a lancer (exe ou raccourci), `key` a reconnaitre ses fenetres (exe cible).
+/// Épingle : `path` sert à lancer (exe ou raccourci), `key` à reconnaître ses fenêtres (exe cible).
 #[derive(Serialize, Clone, PartialEq)]
 struct Pin {
     path: String,
@@ -68,7 +68,7 @@ enum Ev {
 }
 
 static TX: OnceLock<Sender<Ev>> = OnceLock::new();
-/// Derniere fenetre active qui n'est pas la barre.
+/// Dernière fenêtre active qui n'est pas la barre.
 static ACTIVE: AtomicIsize = AtomicIsize::new(0);
 
 pub fn start(app: AppHandle) {
@@ -76,18 +76,23 @@ pub fn start(app: AppHandle) {
     let _ = TX.set(tx);
     std::thread::spawn(hook_thread);
     std::thread::spawn(move || worker(app, rx));
-    // Filet de securite pour le plein ecran (F11 dans une meme fenetre, sans changement de focus).
+    // Filet de sécurité pour le plein écran (F11 dans une même fenêtre, sans changement de focus).
     std::thread::spawn(|| loop {
         std::thread::sleep(Duration::from_millis(800));
         appbar::check_fullscreen();
     });
 }
 
-/// Force un rafraichissement (ex. apres modification des epingles).
+/// Force un rafraîchissement (ex. après modification des épingles).
 pub fn poke() {
     if let Some(tx) = TX.get() {
         let _ = tx.send(Ev::Dirty);
     }
+}
+
+/// Fenêtre active hors maxbar (cible des changements de disposition clavier).
+pub fn active_window() -> HWND {
+    HWND(ACTIVE.load(Relaxed) as *mut c_void)
 }
 
 fn set_active(h: HWND) {
@@ -99,7 +104,7 @@ fn set_active(h: HWND) {
 #[derive(Default)]
 struct Cache {
     apps: HashMap<String, AppInfo>,
-    /// pid -> exe auquel ses fenetres sont rattachees.
+    /// pid -> exe auquel ses fenêtres sont rattachées.
     exe_by_pid: HashMap<u32, String>,
     pins: HashSet<String>,
     /// raccourci -> exe cible
@@ -107,7 +112,7 @@ struct Cache {
 }
 
 fn worker(app: AppHandle, rx: Receiver<Ev>) {
-    // Raccourcis (IShellLink) et icones du shell : COM requis sur ce thread.
+    // Raccourcis (IShellLink) et icônes du shell : COM requis sur ce thread.
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
@@ -124,7 +129,7 @@ fn worker(app: AppHandle, rx: Receiver<Ev>) {
         match rx.recv_timeout(Duration::from_secs(5)) {
             Ok(ev) => {
                 handle(ev);
-                // Regroupe les rafales d'evenements (ouverture d'app = dizaines d'evenements).
+                // Regroupe les rafales d'événements (ouverture d'app = dizaines d'événements).
                 let end = Instant::now() + Duration::from_millis(90);
                 while let Some(left) = end.checked_duration_since(Instant::now()) {
                     match rx.recv_timeout(left) {
@@ -190,7 +195,7 @@ fn refresh(app: &AppHandle, cache: &mut Cache) {
     publish(app, "tasks", &Tasks { windows, active: ACTIVE.load(Relaxed) });
 }
 
-/// Exe vise par une epingle (cible du raccourci), ou None si ce n'est pas un raccourci resolu.
+/// Exe visé par une épingle (cible du raccourci), ou None si ce n'est pas un raccourci résolu.
 fn pin_target(path: &str, links: &mut HashMap<String, Option<String>>) -> Option<String> {
     if !path.to_lowercase().ends_with(".lnk") {
         return None;
@@ -229,7 +234,7 @@ fn pin_info(pin: &Pin) -> AppInfo {
         if let Some(stem) = Path::new(&pin.path).file_stem() {
             info.name = stem.to_string_lossy().to_string();
         }
-        // L'icone choisie par le raccourci (ex. Discord, dont la cible Update.exe a une icone generique).
+        // L'icône choisie par le raccourci (ex. Discord, dont la cible Update.exe a une icône générique).
         if let Some(icon) = icons::from_path(&pin.path) {
             info.icon = Some(icon);
         }
@@ -242,19 +247,20 @@ fn windir() -> String {
     std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into())
 }
 
-/// Dossier d'une app epinglee dont les autres exe lui sont rattaches (assistants, versions).
-/// Exclut Windows et les dossiers trop generaux (Program Files...).
+/// Dossier d'une app épinglée, auquel ses autres exe sont rattachés (assistants, versions).
+/// Exclut Windows et les dossiers trop généraux (Program Files...).
 fn pin_dir(key: &str) -> Option<String> {
     if !key.ends_with(".exe") {
         return None;
     }
     let dir = Path::new(key).parent()?;
     let d = format!("{}\\", dir.to_string_lossy().trim_end_matches('\\'));
-    (dir.components().count() >= 4 && !d.starts_with(&windir().to_lowercase())).then_some(d)
+    let windows = format!("{}\\", windir().to_lowercase().trim_end_matches('\\'));
+    (dir.components().count() >= 4 && !d.starts_with(&windows)).then_some(d)
 }
 
-/// Exe auquel rattacher les fenetres d'un process. Un exe installe sous le dossier d'une app
-/// epinglee lui est rattache (steamwebhelper -> Steam, Discord\app-1.0\Discord.exe -> Discord).
+/// Exe auquel rattacher les fenêtres d'un process. Un exe installé sous le dossier d'une app
+/// épinglée lui est rattaché (steamwebhelper -> Steam, Discord\app-1.0\Discord.exe -> Discord).
 fn owning_exe(pid: u32, pins: &HashSet<String>) -> String {
     let exe = exe_path(pid);
     let lower = exe.to_lowercase();
@@ -270,10 +276,7 @@ fn owning_exe(pid: u32, pins: &HashSet<String>) -> String {
 
 fn app_info(path: &str, h: Option<HWND>) -> AppInfo {
     let stem = Path::new(path).file_stem().map(|s| s.to_string_lossy().to_string());
-    let name = sys::file_description(path)
-        .or(stem)
-        .or_else(|| h.map(title))
-        .unwrap_or_else(|| "Application".into());
+    let name = sys::file_description(path).or(stem).or_else(|| h.map(title)).unwrap_or_else(|| "Application".into());
     let icon = (!path.is_empty()).then(|| icons::from_path(path)).flatten().or_else(|| h.and_then(icons::from_window));
     AppInfo { name, path: path.to_string(), icon }
 }
@@ -283,7 +286,7 @@ unsafe extern "system" fn collect(h: HWND, lp: LPARAM) -> BOOL {
     TRUE
 }
 
-/// Regle "Alt+Tab" simplifiee : fenetres visibles, non possedees, non outils, non masquees (cloaked).
+/// Règle "Alt+Tab" simplifiée : fenêtres visibles, non possédées, non outils, non masquées (cloaked).
 unsafe fn is_task(h: HWND) -> bool {
     if !IsWindowVisible(h).as_bool() || h == appbar::hwnd() {
         return false;
@@ -315,7 +318,7 @@ fn title(h: HWND) -> String {
     String::from_utf16_lossy(&buf[..n.max(0) as usize])
 }
 
-/// Les apps UWP sont hebergees par ApplicationFrameHost : on cherche le vrai process.
+/// Les apps UWP sont hébergées par ApplicationFrameHost : on cherche le vrai process.
 unsafe fn real_pid(h: HWND) -> u32 {
     let mut pid = 0u32;
     GetWindowThreadProcessId(h, Some(&mut pid));
@@ -355,7 +358,7 @@ pub fn exe_path(pid: u32) -> String {
     }
 }
 
-/// Clic sur une fenetre : la ramene, ou la reduit si elle est deja au premier plan.
+/// Clic sur une fenêtre : la ramène, ou la réduit si elle est déjà au premier plan.
 pub fn activate(hwnd: isize) {
     let h = HWND(hwnd as *mut c_void);
     unsafe {
@@ -367,7 +370,7 @@ pub fn activate(hwnd: isize) {
             let _ = ShowWindow(h, SW_RESTORE);
         }
         if !SetForegroundWindow(h).as_bool() {
-            // Verrou de premier plan : une frappe Alt factice debloque SetForegroundWindow.
+            // Verrou de premier plan : une frappe Alt factice débloque SetForegroundWindow.
             sys::press(&[VK_MENU]);
             let _ = SetForegroundWindow(h);
         }
@@ -392,8 +395,16 @@ unsafe extern "system" fn on_event(
     if id_object != OBJID_WINDOW.0 || id_child != CHILDID_SELF as i32 || h.is_invalid() {
         return;
     }
-    // Ignore les sous-controles (champs de texte, etc.) sauf a la destruction (fenetre deja invalide).
+    // Ignore les sous-contrôles (champs de texte, etc.) sauf à la destruction (fenêtre déjà invalide).
     if event != EVENT_OBJECT_DESTROY && GetAncestor(h, GA_ROOT) != h {
+        return;
+    }
+    match event {
+        EVENT_SYSTEM_FOREGROUND => appbar::on_foreground(h),
+        EVENT_OBJECT_SHOW | EVENT_SYSTEM_MOVESIZEEND => appbar::keep_clear(h),
+        _ => {}
+    }
+    if event == EVENT_SYSTEM_MOVESIZEEND {
         return;
     }
     let ev = if event == EVENT_SYSTEM_FOREGROUND { Ev::Foreground(h.0 as isize) } else { Ev::Dirty };
@@ -405,6 +416,7 @@ unsafe extern "system" fn on_event(
 fn hook_thread() {
     let ranges = [
         (EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND),
+        (EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZEEND),
         (EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND),
         (EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE),
         (EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE),

@@ -1,4 +1,4 @@
-//! Petits utilitaires Win32 : chaines larges, lancement, touches, version info, autostart.
+//! Petits utilitaires Win32 : chaînes larges, lancement, touches, version info, autostart.
 
 use std::ffi::c_void;
 
@@ -40,12 +40,16 @@ pub fn open(target: &str) {
     }
 }
 
-/// Appuie puis relache une combinaison (ex. Win, Win+N).
+/// Appuie puis relâche une combinaison (ex. Win, Win+N).
 pub fn press(keys: &[VIRTUAL_KEY]) {
     let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
-            ki: KEYBDINPUT { wVk: vk, dwFlags: if up { KEYEVENTF_KEYUP } else { Default::default() }, ..Default::default() },
+            ki: KEYBDINPUT {
+                wVk: vk,
+                dwFlags: if up { KEYEVENTF_KEYUP } else { Default::default() },
+                ..Default::default()
+            },
         },
     };
     let mut inputs: Vec<INPUT> = keys.iter().map(|&k| key(k, false)).collect();
@@ -74,18 +78,21 @@ pub fn file_description(path: &str) -> Option<String> {
 
         let mut ptr: *mut c_void = std::ptr::null_mut();
         let mut len = 0u32;
-        if !VerQueryValueW(data.as_ptr() as *const c_void, w!("\\VarFileInfo\\Translation"), &mut ptr, &mut len).as_bool()
+        if !VerQueryValueW(data.as_ptr() as *const c_void, w!("\\VarFileInfo\\Translation"), &mut ptr, &mut len)
+            .as_bool()
             || len < 4
         {
             return None;
         }
         let pair = *(ptr as *const [u16; 2]);
         let sub = wide(&format!("\\StringFileInfo\\{:04x}{:04x}\\FileDescription", pair[0], pair[1]));
-        if !VerQueryValueW(data.as_ptr() as *const c_void, PCWSTR(sub.as_ptr()), &mut ptr, &mut len).as_bool() || len == 0 {
+        if !VerQueryValueW(data.as_ptr() as *const c_void, PCWSTR(sub.as_ptr()), &mut ptr, &mut len).as_bool()
+            || len == 0
+        {
             return None;
         }
         let text = std::slice::from_raw_parts(ptr as *const u16, len as usize);
-        // Certaines apps declarent une longueur fausse : on coupe au premier NUL.
+        // Certaines apps déclarent une longueur fausse : on coupe au premier NUL.
         let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
         let s = String::from_utf16_lossy(text).trim().to_string();
         (!s.is_empty()).then_some(s)

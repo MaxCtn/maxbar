@@ -1,4 +1,4 @@
-//! Extraction d'icones Windows -> PNG en data URL.
+//! Extraction d'icônes Windows -> PNG en data URL.
 
 use std::ffi::c_void;
 
@@ -18,7 +18,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use crate::sys::wide;
 
-/// Taille demandee : assez grande pour rester nette a 150-200 % de mise a l'echelle.
+/// Taille demandée : assez grande pour rester nette à 150-200 % de mise à l'échelle.
 const SIZE: u32 = 48;
 
 pub fn from_path(path: &str) -> Option<String> {
@@ -32,7 +32,7 @@ pub fn from_path(path: &str) -> Option<String> {
                 return out;
             }
         }
-        // Raccourcis, dossiers, types sans ressource d'icone.
+        // Raccourcis, dossiers, types sans ressource d'icône.
         let mut info = SHFILEINFOW::default();
         let ok = SHGetFileInfoW(
             PCWSTR(p.as_ptr()),
@@ -50,7 +50,7 @@ pub fn from_path(path: &str) -> Option<String> {
     None
 }
 
-/// Icone propre a la fenetre (ne pas detruire : elle appartient a la fenetre).
+/// Icône propre à la fenêtre (ne pas détruire : elle appartient à la fenêtre).
 pub fn from_window(h: HWND) -> Option<String> {
     unsafe {
         let mut res = 0usize;
@@ -90,7 +90,7 @@ unsafe fn bits(bmp: HBITMAP, w: i32, h: i32) -> Option<Vec<u8>> {
     (lines > 0).then_some(px)
 }
 
-/// Icone appartenant a un autre process (zone de notification) : lue sans etre detruite.
+/// Icône appartenant à un autre process (zone de notification) : lue sans être détruite.
 pub fn encode_icon(icon: HICON) -> Option<String> {
     unsafe { encode(icon) }
 }
@@ -123,7 +123,7 @@ unsafe fn encode(icon: HICON) -> Option<String> {
         cleanup();
         return None;
     };
-    // Icones anciennes sans canal alpha : on reconstruit l'alpha depuis le masque.
+    // Icônes anciennes sans canal alpha : on reconstruit l'alpha depuis le masque.
     if !px.chunks_exact(4).any(|p| p[3] != 0) {
         if let Some(m) = (!mask.is_invalid()).then(|| bits(mask, w, h)).flatten() {
             for (p, mk) in px.chunks_exact_mut(4).zip(m.chunks_exact(4)) {

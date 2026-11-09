@@ -1,4 +1,4 @@
-//! Lecture en cours via les controles media de Windows (Spotify, navigateurs, Deezer...).
+//! Lecture en cours via les contrôles média de Windows (Spotify, navigateurs, Deezer...).
 
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::OnceLock;
@@ -8,8 +8,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Serialize;
 use tauri::AppHandle;
 use windows::Media::Control::{
-    GlobalSystemMediaTransportControlsSession as Session,
-    GlobalSystemMediaTransportControlsSessionManager as Manager,
+    GlobalSystemMediaTransportControlsSession as Session, GlobalSystemMediaTransportControlsSessionManager as Manager,
     GlobalSystemMediaTransportControlsSessionMediaProperties as Props,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
 };
@@ -18,7 +17,7 @@ use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 
 use crate::publish;
 
-/// Ecart entre l'epoque Windows (1601) et Unix, en unites de 100 ns.
+/// Écart entre l'époque Windows (1601) et Unix, en unités de 100 ns.
 const EPOCH_DIFF: i64 = 116_444_736_000_000_000;
 
 #[derive(Serialize, PartialEq, Default)]
@@ -55,7 +54,7 @@ pub fn start(app: AppHandle) {
         let mut art_tries = 0u8;
         let mut has_art = false;
         loop {
-            // Barre masquee (jeu plein ecran) : pas d'interrogation des lecteurs.
+            // Barre masquée (jeu plein écran) : pas d'interrogation des lecteurs.
             if crate::appbar::fullscreen_active() {
                 if let Err(RecvTimeoutError::Disconnected) = rx.recv_timeout(Duration::from_secs(2)) {
                     return;
@@ -75,10 +74,12 @@ pub fn start(app: AppHandle) {
                     has_art = false;
                     publish(&app, "art", &Option::<String>::None);
                 }
-                // Spotify & co publient la pochette un peu apres le titre : quelques essais.
+                // Spotify & co publient la pochette un peu après le titre : quelques essais.
                 if !has_art && art_tries < 6 {
                     art_tries += 1;
-                    if let Some(art) = s.TryGetMediaPropertiesAsync().and_then(|op| op.join()).ok().and_then(|p| thumbnail(&p)) {
+                    if let Some(art) =
+                        s.TryGetMediaPropertiesAsync().and_then(|op| op.join()).ok().and_then(|p| thumbnail(&p))
+                    {
                         has_art = true;
                         publish(&app, "art", &Some(art));
                     }

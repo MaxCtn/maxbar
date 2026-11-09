@@ -9,24 +9,24 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     /// "top" ou "bottom"
     pub edge: String,
-    /// Hauteur reservee en pixels logiques (DPI-independants).
+    /// Hauteur réservée en pixels logiques (indépendants du DPI).
     pub height: u32,
-    /// Apps epinglees : exe, raccourci .lnk ou URL.
+    /// Apps épinglées : exe, raccourci .lnk ou URL.
     pub pinned: Vec<String>,
     pub show_music: bool,
     pub show_claude: bool,
     pub show_system: bool,
     pub show_weather: bool,
     pub clock_seconds: bool,
-    /// Ville pour la meteo ; vide = position approximative via l'adresse IP.
+    /// Ville pour la météo ; vide = position approximative via l'adresse IP.
     pub weather_city: String,
-    /// Opacite du fond de la barre (0 = transparente, 1 = opaque).
+    /// Opacité du fond de la barre (0 = transparente, 1 = opaque).
     pub opacity: f64,
-    /// Icones de la zone de notification relayees dans maxbar.
+    /// Icônes de la zone de notification relayées dans maxbar.
     pub tray: bool,
-    /// Barre des taches Windows completement cachee (et non simplement en masquage auto).
+    /// Barre des tâches Windows complètement cachée (et non simplement en masquage auto).
     pub hide_windows_taskbar: bool,
-    /// Les epingles de la barre Windows ont deja ete importees (une seule fois).
+    /// Les épingles de la barre Windows ont déjà été importées (une seule fois).
     pub windows_pins_imported: bool,
 }
 
@@ -44,7 +44,7 @@ impl Default for Config {
             weather_city: String::new(),
             opacity: 0.72,
             tray: true,
-            hide_windows_taskbar: false,
+            hide_windows_taskbar: true,
             windows_pins_imported: false,
         }
     }
@@ -66,18 +66,19 @@ fn default_pins() -> Vec<String> {
         format!(r"{}\Steam\steam.exe", env("ProgramFiles(x86)")),
     ];
     let mut pins: Vec<String> = candidates.into_iter().filter(|p| Path::new(p).exists()).collect();
-    // Un seul navigateur par defaut.
+    // Un seul navigateur par défaut.
     if pins.iter().any(|p| p.ends_with("chrome.exe")) {
         pins.retain(|p| !p.ends_with("msedge.exe"));
     }
     pins
 }
 
-/// Raccourcis epingles a la barre des taches Windows.
+/// Raccourcis épinglés à la barre des tâches Windows.
 pub fn windows_pins() -> Vec<String> {
-    let dir = std::env::var("APPDATA").map(PathBuf::from).unwrap_or_default().join(
-        r"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar",
-    );
+    let dir = std::env::var("APPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_default()
+        .join(r"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
     let mut pins: Vec<String> = std::fs::read_dir(dir)
         .map(|it| {
             it.flatten()
@@ -102,7 +103,18 @@ pub fn path() -> PathBuf {
 
 pub fn load() -> Config {
     let p = path();
-    let mut c = std::fs::read_to_string(&p).ok().and_then(|s| serde_json::from_str::<Config>(&s).ok()).unwrap_or_default();
+    let text = std::fs::read_to_string(&p).ok();
+    // Certains éditeurs ajoutent un BOM UTF-8, que serde_json refuse.
+    let parsed = text.as_deref().map(|s| serde_json::from_str::<Config>(s.trim_start_matches('\u{feff}')));
+    let mut c = match parsed {
+        Some(Ok(c)) => c,
+        Some(Err(_)) => {
+            // Fichier illisible : on le garde de côté plutôt que de l'écraser.
+            let _ = std::fs::copy(&p, p.with_extension("json.bak"));
+            Config::default()
+        }
+        None => Config::default(),
+    };
     c.height = c.height.clamp(28, 96);
     c.opacity = c.opacity.clamp(0.0, 1.0);
     if !c.windows_pins_imported {
