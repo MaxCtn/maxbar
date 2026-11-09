@@ -948,19 +948,23 @@ function trayPanel() {
   for (const [id, b] of trayEls) if (!keep.has(b)) trayEls.delete(id);
   trayGrid.style.setProperty('--cols', String(clamp(Math.ceil(Math.sqrt(list.length * 1.4)), 3, 7)));
   nodes.forEach((n, i) => n.style.setProperty('--i', String(i)));
-  trayGrid.replaceChildren(...nodes);
+  // Mise à jour sur place : réinsérer un élément relancerait son animation d'entrée.
+  nodes.forEach((n, i) => { if (trayGrid.children[i] !== n) trayGrid.insertBefore(n, trayGrid.children[i] || null); });
+  while (trayGrid.children.length > nodes.length) trayGrid.lastChild.remove();
   return [trayGrid];
 }
 
 // ====================================================================== popups
-const pop = { name: null, anchor: null, timer: 0 };
+const pop = { name: null, anchor: null, timer: 0, enterTimer: 0 };
 const POPS = { claude: claudePanel, sys: sysPanel, tray: trayPanel, sound: soundPanel, lang: langPanel };
 // Sujets qui redessinent chaque popup (le popup son se met à jour sur place, voir refreshMixer).
 const POP_DEPS = { claude: ['claude'], sys: ['stats'], tray: ['tray', 'config'], sound: [], lang: ['keyboard'] };
 
 function renderPop() {
   const el = $('panel');
-  el.replaceChildren(...POPS[pop.name]().flat().filter(Boolean));
+  const nodes = POPS[pop.name]().flat().filter(Boolean);
+  const same = nodes.length === el.children.length && nodes.every((n, i) => el.children[i] === n);
+  if (!same) el.replaceChildren(...nodes);
   placePop();
 }
 
@@ -992,7 +996,12 @@ async function openPop(name, anchor) {
   if (name === 'sound') mixer.key = mixerKey(mixer.data);
   renderPop();
   await setShape('pop', rectOf(el));
-  if (pop.name === name) requestAnimationFrame(() => el.classList.add('open'));
+  if (pop.name === name) {
+    // Animation des éléments à l'ouverture uniquement, pas à chaque mise à jour.
+    requestAnimationFrame(() => el.classList.add('open', 'entering'));
+    clearTimeout(pop.enterTimer);
+    pop.enterTimer = setTimeout(() => el.classList.remove('entering'), 900);
+  }
   if (name === 'sound') startMixer();
 }
 
