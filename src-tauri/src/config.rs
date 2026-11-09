@@ -28,6 +28,10 @@ pub struct Config {
     pub hide_windows_taskbar: bool,
     /// Les épingles de la barre Windows ont déjà été importées (une seule fois).
     pub windows_pins_imported: bool,
+    /// La touche Windows ouvre le lanceur de maxbar à la place du menu Démarrer.
+    pub win_key: bool,
+    /// Recherche web du lanceur : la requête est ajoutée à la fin de l'adresse.
+    pub search_url: String,
 }
 
 impl Default for Config {
@@ -46,6 +50,8 @@ impl Default for Config {
             tray: true,
             hide_windows_taskbar: true,
             windows_pins_imported: false,
+            win_key: true,
+            search_url: "https://www.google.com/search?q=".into(),
         }
     }
 }

@@ -232,30 +232,34 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
   position: absolute; left: 0; top: 0;
   opacity: 0; pointer-events: none;
   transform: scale(0.94);
-  transition: opacity 0.18s, transform 0.3s var(--spring);
+  transition: opacity 0.16s, transform 0.3s var(--spring);
 }
+/* Délai court : la vue suit l'îlot qui grandit sans attendre la fin de son mouvement. */
 .island[data-mode="compact"] .v-compact,
 .island[data-mode="full"] .v-full,
 .island[data-mode="toast"] .v-toast {
   opacity: 1; pointer-events: auto; transform: none;
-  transition: opacity 0.3s 0.12s, transform 0.45s 0.08s var(--spring);
+  transition: opacity 0.26s 0.06s, transform 0.42s 0.04s var(--spring);
 }
+/* Ancien titre qui s'efface au changement de morceau (positionné par le script). */
+.island .ghost { position: absolute; margin: 0; pointer-events: none; }
 
 .v-compact { display: flex; align-items: center; gap: 9px; width: max-content; height: var(--ih, 32px); padding: 0 13px 0 5px; white-space: nowrap; }
 .i-art { position: relative; width: 23px; height: 23px; border-radius: 50%; overflow: hidden; background: #1d1c25; flex: none; display: grid; place-items: center; }
-.i-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.i-art img:not([src]) { display: none; }
-.i-note { font-size: 11px; color: var(--muted); }
+.i-art img, .i-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.i-note { font-size: 11px; color: var(--muted); transition: opacity 0.3s; }
+.has-art .i-note { opacity: 0; }
 .i-text { display: flex; align-items: baseline; gap: 6px; max-width: 290px; min-width: 0; }
 .i-text b { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .i-text span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 120px; }
 
 .eq { display: flex; align-items: center; gap: 2px; height: 14px; flex: none; }
-.eq i { display: block; width: 2.5px; border-radius: 2px; background: var(--faint); transform-origin: center; transition: background 0.3s, height 0.4s var(--bounce); }
+.eq i { display: block; width: 2.5px; border-radius: 2px; background: var(--faint); transform-origin: center; transition: background 0.3s; }
 .eq i:nth-child(1) { height: 6px; } .eq i:nth-child(2) { height: 12px; } .eq i:nth-child(3) { height: 8px; } .eq i:nth-child(4) { height: 11px; }
 .island.playing .eq i { background: var(--green); }
-/* Animée seulement quand l'îlot est déployé (sinon aucune animation permanente). */
-.island.playing[data-mode="full"] .eq i { animation: eq 0.9s ease-in-out infinite alternate; }
+/* Animée seulement îlot déployé et en lecture (aucune animation permanente dans la barre) ; la pause fige les barres là où elles sont. */
+.island[data-mode="full"] .eq i { animation: eq 0.9s ease-in-out infinite alternate paused; }
+.island.playing[data-mode="full"] .eq i { animation-play-state: running; }
 .eq i:nth-child(2) { animation-delay: -0.3s !important; } .eq i:nth-child(3) { animation-delay: -0.6s !important; } .eq i:nth-child(4) { animation-delay: -0.15s !important; }
 @keyframes eq { from { transform: scaleY(0.35); } to { transform: scaleY(1); } }
 .eq.big { height: 18px; gap: 3px; } .eq.big i { width: 3px; }
@@ -263,18 +267,19 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .v-full { width: 392px; padding: 14px 16px 10px; }
 .i-row { display: flex; align-items: center; gap: 14px; }
 .i-cover {
+  position: relative; overflow: hidden;
   width: 62px; height: 62px; flex: none; border-radius: 14px;
-  background: #1d1c25 center/cover no-repeat; display: grid; place-items: center;
-  color: var(--muted); font-size: 22px;
+  background: #1d1c25; display: grid; place-items: center;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
   transition: transform 0.5s var(--bounce);
 }
+.i-cover .i-note { font-size: 22px; }
 .island:not(.playing) .i-cover { transform: scale(0.9); }
-.i-cover.has-art span { display: none; }
-.i-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.i-meta b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.i-meta span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.i-meta .i-src { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+.i-meta { position: relative; display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.i-src { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.i-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.i-lines b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.i-lines span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .i-time { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 10.5px; color: var(--muted); }
 .i-track { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
 .i-track b { display: block; height: 100%; width: 100%; background: #fff; border-radius: 2px; transform-origin: left; transform: scaleX(0); transition: transform 1s linear; }
@@ -283,10 +288,12 @@ body.ready .edge-bottom .zone { animation-name: zone-in-up; }
 .i-ctl .icon-btn svg { width: 18px; height: 18px; }
 .i-ctl .icon-btn path { stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 .i-ctl .icon-btn:disabled { opacity: 0.3; }
-.i-ctl .play svg { width: 22px; height: 22px; }
-.play .i-pause { display: none; }
-.island.playing .play .i-play { display: none; }
-.island.playing .play .i-pause { display: block; }
+.i-ctl .play svg { width: 22px; height: 22px; overflow: visible; }
+/* Lecture et pause superposées : l'une tourne et s'efface pendant que l'autre arrive. */
+.play path { transform-box: fill-box; transform-origin: center; transition: opacity 0.2s, transform 0.42s var(--bounce); }
+.play .i-pause { opacity: 0; transform: scale(0.5) rotate(-45deg); }
+.island.playing .play .i-play { opacity: 0; transform: scale(0.5) rotate(45deg); }
+.island.playing .play .i-pause { opacity: 1; transform: none; }
 
 .v-toast { display: flex; align-items: center; gap: 10px; width: 280px; height: var(--ih, 32px); padding: 0 14px 0 10px; }
 .t-icon { width: 16px; height: 16px; flex: none; color: #fff; }

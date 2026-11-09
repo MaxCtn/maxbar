@@ -351,7 +351,9 @@ function collapseIsland() {
 
 /** Changement de morceau : l'îlot s'ouvre quelques secondes, comme une notification. */
 function peekIsland() {
-  if (pop.name || drawer.open || island.expanded) return;
+  if (pop.name || drawer.open) return;
+  // Ouvert à la main : on n'y touche pas. Déjà en aperçu : on le prolonge.
+  if (island.expanded && !island.peek) return;
   island.expanded = true;
   island.peek = true;
   layoutIsland();
@@ -378,6 +380,14 @@ function showToast(t, ms = 1500) {
 }
 
 // ======================================================================= média
+/** Windows demande moins d'animations : les changements se font alors sans mouvement. */
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const SOFT = 'cubic-bezier(0.22, 1, 0.36, 1)';
+/** Lecture/pause demandée depuis l'îlot, affichée sans attendre la confirmation du lecteur. */
+const wanted = { playing: null, until: 0, timer: 0 };
+/** Pochette affichée, et délai de grâce quand le nouveau morceau n'a pas encore la sienne. */
+const shownArt = { src: null, job: 0, dropTimer: 0 };
+
 function mediaPosition() {
   const m = S.media;
   if (!m) return 0;
@@ -386,11 +396,79 @@ function mediaPosition() {
   return m.duration_ms > 0 ? Math.min(pos, m.duration_ms) : pos;
 }
 
+function isPlaying() {
+  const real = !!(mediaVisible() && S.media.playing);
+  if (wanted.playing === null) return real;
+  if (wanted.playing === real || Date.now() > wanted.until) {
+    wanted.playing = null;
+    return real;
+  }
+  return wanted.playing;
+}
+
+function renderPlayState() {
+  const on = isPlaying();
+  $('island').classList.toggle('playing', on);
+  const src = mediaVisible() ? S.media.source : '';
+  setText('i-src', src ? `${on ? 'En lecture' : 'En pause'} · ${src}` : '');
+}
+
+function mediaAction(action) {
+  if (action === 'toggle' && mediaVisible()) {
+    // Sans confirmation du lecteur (1,5 s), l'état réel reprend le dessus.
+    wanted.playing = !isPlaying();
+    wanted.until = Date.now() + 1500;
+    clearTimeout(wanted.timer);
+    wanted.timer = setTimeout(renderPlayState, 1550);
+    renderPlayState();
+  }
+  invoke('media_control', { action });
+}
+
+/** Changement de morceau : une copie de l'ancien texte s'efface vers le haut, à sa place exacte. */
+function swapOut(node) {
+  const ghost = node.cloneNode(true);
+  ghost.removeAttribute('id');
+  for (const n of ghost.querySelectorAll('[id]')) n.removeAttribute('id');
+  ghost.classList.add('ghost');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.style.cssText = `left:${node.offsetLeft}px;top:${node.offsetTop}px;width:${node.offsetWidth}px`;
+  node.before(ghost);
+  const drop = () => ghost.remove();
+  // L'opacité tombe vite pour que l'ancien et le nouveau texte se croisent sans se superposer.
+  ghost.animate(
+    [{ opacity: 1, transform: 'none' }, { opacity: 0.2, offset: 0.4 }, { opacity: 0, transform: 'translateY(-10px)' }],
+    { duration: 240, easing: 'cubic-bezier(0.4, 0, 0.8, 0.5)', fill: 'forwards' },
+  ).finished.then(drop, drop);
+}
+
+/** ... pendant que le nouveau arrive par le bas, juste derrière. */
+function swapIn(node, delay = 0) {
+  node.animate(
+    [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+    { duration: 320, delay: delay + 70, easing: SOFT, fill: 'backwards' },
+  );
+}
+
+function pulseIsland(el, scale) {
+  el.animate([
+    { scale: '1', easing: 'cubic-bezier(0.3, 0, 0.3, 1)' },
+    { scale: String(scale), offset: 0.32, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' },
+    { scale: '1' },
+  ], { duration: 480 });
+}
+
 function renderMedia() {
   const m = S.media;
   const el = $('island');
   const vis = mediaVisible();
-  el.classList.toggle('playing', !!(vis && m.playing));
+  const key = vis ? `${m.title}\u0001${m.artist}` : '';
+  const changed = lastTrack !== null && key !== '' && key !== lastTrack;
+  // Seule la vue à l'écran anime son ancien contenu (rien à animer si l'îlot était caché).
+  const before = island.mode;
+  const swap = changed && !!lastTrack && !reduceMotion.matches;
+  if (swap && before === 'compact') swapOut($('i-line'));
+  if (swap && before === 'full') swapOut($('i-lines'));
   if (vis) {
     const title = m.title || 'Lecture en cours';
     const artist = m.artist || m.source || '';
@@ -399,30 +477,85 @@ function renderMedia() {
     $('i-artist').hidden = !artist;
     setText('i-title-l', title);
     setText('i-artist-l', [m.artist, m.album].filter(Boolean).join(' — '));
-    setText('i-src', m.source ? `${m.playing ? 'En lecture' : 'En pause'} · ${m.source}` : '');
     setText('i-dur', m.duration_ms > 0 ? mmss(m.duration_ms) : '');
     el.querySelector('[data-media="prev"]').disabled = !m.can_prev;
     el.querySelector('[data-media="next"]').disabled = !m.can_next;
     el.title = [m.title, m.artist, m.source && `via ${m.source}`].filter(Boolean).join(' — ');
   }
-  const key = vis ? `${m.title}\u0001${m.artist}` : '';
-  if (lastTrack !== null && key && key !== lastTrack && !island.toast && performance.now() > 4000) peekIsland();
+  renderPlayState();
   lastTrack = key;
+  if (changed && !island.toast && performance.now() > 4000) peekIsland();
   renderArt();
   layoutIsland();
+  if (swap) {
+    if (island.mode === 'compact') swapIn($('i-line'));
+    // Îlot qui s'ouvre pour l'aperçu : le texte monte pendant qu'il s'agrandit.
+    if (island.mode === 'full') swapIn($('i-lines'), before === 'full' ? 0 : 90);
+    if (island.mode === before) pulseIsland(el, before === 'full' ? 1.015 : 1.04);
+  }
 }
 
+/**
+ * Pochette du morceau en cours (`S.media.art` désigne `S.art.id`). Tant que celle du nouveau
+ * morceau n'est pas arrivée, l'ancienne reste affichée au plus 1,2 s plutôt que de faire clignoter la note.
+ */
 function renderArt() {
-  const img = $('i-art');
-  const cover = $('i-cover');
-  if (S.art) {
-    if (img.getAttribute('src') !== S.art) img.setAttribute('src', S.art);
-    cover.style.backgroundImage = `url("${S.art}")`;
-  } else {
-    img.removeAttribute('src');
-    cover.style.backgroundImage = '';
+  if (!mediaVisible()) {
+    clearTimeout(shownArt.dropTimer);
+    shownArt.dropTimer = 0;
+    showArt(null, false);
+    return;
   }
-  cover.classList.toggle('has-art', !!S.art);
+  const a = S.art;
+  if (S.media.art != null && a?.id === S.media.art) {
+    clearTimeout(shownArt.dropTimer);
+    shownArt.dropTimer = 0;
+    showArt(a.src, true);
+  } else if (shownArt.src && !shownArt.dropTimer) {
+    shownArt.dropTimer = setTimeout(() => { shownArt.dropTimer = 0; showArt(null, true); }, 1200);
+  }
+}
+
+function showArt(src, animate) {
+  if (src === shownArt.src) return;
+  shownArt.src = src;
+  const job = ++shownArt.job;
+  const fade = animate && !reduceMotion.matches && island.mode !== 'hidden';
+  // Décodée avant l'échange : jamais de cadre vide le temps du décodage.
+  const ready = src ? decodeImage(src) : Promise.resolve();
+  ready.then(() => { if (job === shownArt.job) swapArt(src, fade); });
+}
+
+function decodeImage(src) {
+  const img = new Image();
+  img.src = src;
+  return img.decode().catch(() => {});
+}
+
+/** Fondu enchaîné sur deux calques : la nouvelle image se pose sur l'ancienne, qui part ensuite. */
+function swapArt(src, fade) {
+  for (const [box, blur] of [[$('i-art'), 4], [$('i-cover'), 10]]) {
+    const old = [...box.querySelectorAll('img.cur')];
+    for (const o of old) o.classList.remove('cur');
+    const drop = () => { for (const o of old) o.remove(); };
+    box.classList.toggle('has-art', !!src);
+    if (!src) {
+      if (!fade) { drop(); continue; }
+      for (const o of old) {
+        const done = () => o.remove();
+        o.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(0.92)' }],
+          { duration: 300, easing: 'ease-out', fill: 'forwards' }).finished.then(done, done);
+      }
+      continue;
+    }
+    const img = h('img', { class: 'cur', alt: '', draggable: 'false', src });
+    box.append(img);
+    if (!fade) { drop(); continue; }
+    img.animate([
+      { opacity: 0, transform: 'scale(1.16)', filter: `blur(${blur}px)` },
+      { opacity: 1, transform: 'none', filter: 'blur(0px)' },
+    ], { duration: 420, easing: SOFT }).finished.then(drop, drop);
+  }
 }
 
 function tickMedia() {
@@ -959,6 +1092,20 @@ const pop = { name: null, anchor: null, timer: 0, enterTimer: 0 };
 const POPS = { claude: claudePanel, sys: sysPanel, tray: trayPanel, sound: soundPanel, lang: langPanel };
 // Sujets qui redessinent chaque popup (le popup son se met à jour sur place, voir refreshMixer).
 const POP_DEPS = { claude: ['claude'], sys: ['stats'], tray: ['tray', 'config'], sound: [], lang: ['keyboard'] };
+/**
+ * Popups qui gèrent leur propre état : `prepare` avant le premier rendu, `open` une fois affiché,
+ * `close` à la fermeture (y compris quand un autre popup prend sa place).
+ */
+const POP_HOOKS = {
+  sound: { prepare: () => { mixer.key = mixerKey(mixer.data); }, open: startMixer, close: stopMixer },
+};
+
+/** À appeler quand le contenu d'un popup change de taille (liste qui s'allonge, section dépliée). */
+function popResized() {
+  if (!pop.name) return Promise.resolve();
+  placePop();
+  return setShape('pop', rectOf($('panel')));
+}
 
 function renderPop() {
   const el = $('panel');
@@ -982,7 +1129,7 @@ function placePop() {
 
 async function openPop(name, anchor) {
   if (pop.name === name) return closePop();
-  stopMixer();
+  if (pop.name) POP_HOOKS[pop.name]?.close?.();
   closeDrawer();
   collapseIsland();
   const el = $('panel');
@@ -993,7 +1140,8 @@ async function openPop(name, anchor) {
   anchor.classList.add('open');
   el.classList.remove('open');
   el.className = `pop pop-${name}`;
-  if (name === 'sound') mixer.key = mixerKey(mixer.data);
+  el.inert = false;
+  POP_HOOKS[name]?.prepare?.();
   renderPop();
   await setShape('pop', rectOf(el));
   if (pop.name === name) {
@@ -1001,18 +1149,20 @@ async function openPop(name, anchor) {
     requestAnimationFrame(() => el.classList.add('open', 'entering'));
     clearTimeout(pop.enterTimer);
     pop.enterTimer = setTimeout(() => el.classList.remove('entering'), 900);
+    POP_HOOKS[name]?.open?.();
   }
-  if (name === 'sound') startMixer();
 }
 
 function closePop() {
   if (!pop.name) return;
-  stopMixer();
+  POP_HOOKS[pop.name]?.close?.();
   const el = $('panel');
   pop.anchor.classList.remove('open');
   pop.name = null;
   pop.anchor = null;
   el.classList.remove('open');
+  // Encore visible le temps de l'animation : plus aucun clic (un double-clic lancerait l'app deux fois).
+  el.inert = true;
   clearTimeout(pop.timer);
   pop.timer = setTimeout(() => {
     if (pop.name) return;
@@ -1099,7 +1249,7 @@ function actionsSection() {
   const act = (label, ico, name) => h('button', { class: 'act', onclick: () => { closeAll(); invoke('shortcut', { name }); } }, icon(ico), label);
   return [
     act('Notifications', I.bell, 'notifications'),
-    act('Réglages rapides', I.toggles, 'quick'),
+    h('button', { class: 'act', onclick: () => openPop('quick', $('net-btn')) }, icon(I.toggles), 'Réglages rapides'),
     act('Paramètres', I.gear, 'settings'),
     act('Tâches', I.pulse, 'taskmgr'),
   ];
@@ -1231,9 +1381,8 @@ function apply(topic, payload) {
 }
 
 function wire() {
-  $('start').addEventListener('click', () => { closeAll(); invoke('shortcut', { name: 'start' }); });
+  // Clic sur Démarrer, loupe et réseau : câblés par launcher.js et quick.js.
   $('start').addEventListener('contextmenu', (e) => { e.preventDefault(); closeAll(); invoke('shortcut', { name: 'power' }); });
-  $('search').addEventListener('click', () => { closeAll(); invoke('shortcut', { name: 'search' }); });
   $('peek').addEventListener('click', () => { closeAll(); invoke('shortcut', { name: 'desktop' }); });
   $('tray-btn').addEventListener('click', () => openPop('tray', $('tray-btn')));
   $('claude').addEventListener('click', () => openPop('claude', $('claude')));
@@ -1241,7 +1390,6 @@ function wire() {
   $('weather').addEventListener('click', openDrawer);
   $('clock').addEventListener('click', openDrawer);
   $('clock').addEventListener('contextmenu', (e) => { e.preventDefault(); closeAll(); invoke('shortcut', { name: 'notifications' }); });
-  $('net-btn').addEventListener('click', () => { closeAll(); invoke('shortcut', { name: 'quick' }); });
   $('vol-btn').addEventListener('click', () => openPop('sound', $('vol-btn')));
   $('vol-btn').addEventListener('contextmenu', (e) => { e.preventDefault(); closeAll(); invoke('shortcut', { name: 'mixer' }); });
   $('lang').addEventListener('click', () => openPop('lang', $('lang')));
@@ -1264,7 +1412,7 @@ function wire() {
     e.preventDefault();
     invoke('volume', { action: 'step', value: e.deltaY < 0 ? 0.02 : -0.02 });
   }, { passive: false });
-  isl.querySelectorAll('[data-media]').forEach((b) => b.addEventListener('click', () => invoke('media_control', { action: b.dataset.media })));
+  isl.querySelectorAll('[data-media]').forEach((b) => b.addEventListener('click', () => mediaAction(b.dataset.media)));
 
   document.addEventListener('mousedown', (e) => {
     const t = e.target;

@@ -148,3 +148,44 @@ unsafe fn encode(icon: HICON) -> Option<String> {
     }
     Some(format!("data:image/png;base64,{}", STANDARD.encode(out)))
 }
+
+/// Bitmap 32 bits (ex. `IShellItemImageFactory::GetImage`) -> PNG. Le bitmap reste à libérer par l'appelant.
+pub fn from_bitmap(bmp: HBITMAP) -> Option<String> {
+    unsafe {
+        let mut bm = BITMAP::default();
+        let size = std::mem::size_of::<BITMAP>() as i32;
+        if GetObjectW(HGDIOBJ(bmp.0), size, Some(&mut bm as *mut _ as *mut c_void)) == 0 {
+            return None;
+        }
+        let (w, h) = (bm.bmWidth, bm.bmHeight.abs());
+        if w <= 0 || h <= 0 || w > 256 || h > 256 {
+            return None;
+        }
+        let mut px = bits(bmp, w, h)?;
+        if px.chunks_exact(4).all(|p| p[3] == 0) {
+            px.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+        } else if px.chunks_exact(4).all(|p| p[0].max(p[1]).max(p[2]) <= p[3]) {
+            // Alpha prémultiplié (aucune composante ne dépasse l'alpha) : PNG attend un alpha droit.
+            for p in px.chunks_exact_mut(4) {
+                let a = u32::from(p[3]);
+                if a > 0 && a < 255 {
+                    for c in &mut p[..3] {
+                        *c = ((u32::from(*c) * 255 + a / 2) / a).min(255) as u8;
+                    }
+                }
+            }
+        }
+        for p in px.chunks_exact_mut(4) {
+            p.swap(0, 2);
+        }
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, w as u32, h as u32);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            let mut wr = enc.write_header().ok()?;
+            wr.write_image_data(&px).ok()?;
+        }
+        Some(format!("data:image/png;base64,{}", STANDARD.encode(out)))
+    }
+}

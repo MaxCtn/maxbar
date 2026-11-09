@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>maxbar</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="launcher.css">
+  <link rel="stylesheet" href="quick.css">
 </head>
 <body>
   <div id="root" class="edge-top">
     <header id="bar">
       <div class="zone left">
-        <button id="start" class="icon-btn start" aria-label="Menu Démarrer" title="Menu Démarrer — clic droit : menu système">
+        <button id="start" class="icon-btn start" aria-label="Démarrer" aria-haspopup="dialog" title="Démarrer — clic droit : menu système">
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="11" width="15" height="5.5" rx="2.75"/><rect x="5.5" y="3.5" width="9" height="5" rx="1.6" class="accent"/></svg>
         </button>
-        <button id="search" class="icon-btn" aria-label="Rechercher" title="Rechercher">
+        <button id="search" class="icon-btn" aria-label="Rechercher" aria-haspopup="dialog" title="Rechercher">
           <svg viewBox="0 0 20 20" aria-hidden="true" class="stroke"><circle cx="8.6" cy="8.6" r="5.2"/><path d="m12.6 12.6 4 4"/></svg>
         </button>
         <div id="dock" role="toolbar" aria-label="Applications"></div>
@@ -43,7 +45,7 @@
           <span id="lang-code"></span>
         </div>
         <div id="status" class="status">
-          <button id="net-btn" class="widget si-btn" title="Paramètres rapides">
+          <button id="net-btn" class="widget si-btn" aria-label="Réseau et paramètres rapides" aria-haspopup="dialog" title="Réseau et paramètres rapides">
             <span id="net-icon" class="si"></span>
             <span id="bat" class="bat" hidden></span>
           </button>
@@ -60,17 +62,16 @@
 
     <div id="island" class="island" data-mode="hidden">
       <div id="iv-compact" class="v v-compact">
-        <span class="i-art"><img id="i-art" alt=""><span class="i-note">♪</span></span>
-        <span class="i-text"><b id="i-title"></b><span id="i-artist"></span></span>
+        <span id="i-art" class="i-art"><span class="i-note" aria-hidden="true">♪</span></span>
+        <span id="i-line" class="i-text"><b id="i-title"></b><span id="i-artist"></span></span>
         <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
       </div>
       <div id="iv-full" class="v v-full">
         <div class="i-row">
-          <div id="i-cover" class="i-cover"><span>♪</span></div>
+          <div id="i-cover" class="i-cover"><span class="i-note" aria-hidden="true">♪</span></div>
           <div class="i-meta">
             <span id="i-src" class="i-src"></span>
-            <b id="i-title-l"></b>
-            <span id="i-artist-l"></span>
+            <div id="i-lines" class="i-lines"><b id="i-title-l"></b><span id="i-artist-l"></span></div>
           </div>
           <span class="eq big" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         </div>
@@ -97,5 +98,7 @@
     <aside id="drawer" class="drawer" role="dialog" aria-label="Agenda et réglages"></aside>
   </div>
   <script src="app.js"></script>
+  <script src="launcher.js"></script>
+  <script src="quick.js"></script>
 </body>
 </html>

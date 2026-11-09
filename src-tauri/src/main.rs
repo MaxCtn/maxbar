@@ -6,12 +6,16 @@ mod claude;
 mod config;
 mod icons;
 mod keyboard;
+mod launcher;
 mod media;
+mod network;
+mod quick;
 mod stats;
 mod sys;
 mod tasks;
 mod tray;
 mod weather;
+mod winkey;
 
 use std::sync::Mutex;
 
@@ -21,7 +25,7 @@ use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem}
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow, Wry};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    VIRTUAL_KEY, VK_A, VK_CONTROL, VK_D, VK_ESCAPE, VK_LWIN, VK_N, VK_S, VK_SHIFT, VK_X,
+    VIRTUAL_KEY, VK_CONTROL, VK_D, VK_ESCAPE, VK_LWIN, VK_N, VK_SHIFT, VK_X,
 };
 
 /// Dernier état publié par chaque source, pour que l'interface démarre avec des données.
@@ -35,6 +39,7 @@ struct TrayItems {
     bottom: CheckMenuItem<Wry>,
     hide_taskbar: CheckMenuItem<Wry>,
     remove_taskbar: CheckMenuItem<Wry>,
+    win_key: CheckMenuItem<Wry>,
     autostart: CheckMenuItem<Wry>,
 }
 
@@ -127,23 +132,19 @@ fn keyboard_layout(id: isize) {
     keyboard::select(id);
 }
 
-/// Raccourcis du shell Windows (menu Démarrer, notifications, paramètres rapides...).
+/// Raccourcis du shell Windows sans équivalent maxbar (menu système, notifications, bureau...).
+/// Les touches injectées échappent au hook de `winkey` et gardent leur comportement natif.
 #[tauri::command]
 fn shortcut(name: String) {
     let keys: &[VIRTUAL_KEY] = match name.as_str() {
-        "start" => &[VK_LWIN],
         "power" => &[VK_LWIN, VK_X],
-        "search" => &[VK_LWIN, VK_S],
         "notifications" => &[VK_LWIN, VK_N],
-        "quick" => &[VK_LWIN, VK_A],
         "desktop" => &[VK_LWIN, VK_D],
         "taskmgr" => &[VK_CONTROL, VK_SHIFT, VK_ESCAPE],
         "settings" => return sys::open("ms-settings:"),
         "sound" => return sys::open("ms-settings:sound"),
         "mixer" => return sys::open("ms-settings:apps-volume"),
         "keyboard" => return sys::open("ms-settings:keyboard"),
-        "network" => return sys::open("ms-settings:network"),
-        "date" => return sys::open("ms-settings:dateandtime"),
         _ => return,
     };
     sys::press(keys);
@@ -196,6 +197,7 @@ fn apply_config(app: &AppHandle, cfg: Config) {
     if cfg.hide_windows_taskbar != appbar::taskbar_hidden() {
         appbar::set_taskbar_hidden(cfg.hide_windows_taskbar);
     }
+    winkey::set_enabled(cfg.win_key);
     publish(app, "config", &cfg);
     sync_tray(app);
     tasks::poke();
@@ -211,11 +213,12 @@ fn update_config(app: &AppHandle, change: impl FnOnce(&mut Config)) {
 
 fn sync_tray(app: &AppHandle) {
     let Some(t) = app.try_state::<TrayItems>() else { return };
-    let bottom = current_config(app).bottom();
-    let _ = t.top.set_checked(!bottom);
-    let _ = t.bottom.set_checked(bottom);
+    let cfg = current_config(app);
+    let _ = t.top.set_checked(!cfg.bottom());
+    let _ = t.bottom.set_checked(cfg.bottom());
     let _ = t.hide_taskbar.set_checked(appbar::taskbar_autohide());
     let _ = t.remove_taskbar.set_checked(appbar::taskbar_hidden());
+    let _ = t.win_key.set_checked(cfg.win_key);
     let _ = t.autostart.set_checked(sys::autostart_enabled());
 }
 
@@ -235,6 +238,7 @@ fn on_menu(app: &AppHandle, id: &str) {
             sync_tray(app);
         }
         "remove-taskbar" => update_config(app, |c| c.hide_windows_taskbar = !c.hide_windows_taskbar),
+        "win-key" => update_config(app, |c| c.win_key = !c.win_key),
         "import-pins" => update_config(app, |c| {
             let pins = config::windows_pins();
             if !pins.is_empty() {
@@ -288,6 +292,14 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         cfg.hide_windows_taskbar,
         None::<&str>,
     )?;
+    let win_key = CheckMenuItem::with_id(
+        app,
+        "win-key",
+        "Touche Windows : ouvrir le lanceur maxbar",
+        true,
+        cfg.win_key,
+        None::<&str>,
+    )?;
     let import = MenuItem::with_id(app, "import-pins", "Réimporter les épingles de Windows", true, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
@@ -302,8 +314,21 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quitter maxbar", true, None::<&str>)?;
     let (s1, s2, s3) =
         (PredefinedMenuItem::separator(app)?, PredefinedMenuItem::separator(app)?, PredefinedMenuItem::separator(app)?);
-    let items: [&dyn IsMenuItem<Wry>; 12] =
-        [&top, &bottom, &s1, &hide_taskbar, &remove_taskbar, &import, &autostart, &s2, &edit, &reload, &s3, &quit];
+    let items: [&dyn IsMenuItem<Wry>; 13] = [
+        &top,
+        &bottom,
+        &s1,
+        &hide_taskbar,
+        &remove_taskbar,
+        &win_key,
+        &import,
+        &autostart,
+        &s2,
+        &edit,
+        &reload,
+        &s3,
+        &quit,
+    ];
     let menu = Menu::with_items(app, &items)?;
 
     let mut tray = TrayIconBuilder::with_id("maxbar").tooltip("maxbar").menu(&menu).show_menu_on_left_click(true);
@@ -311,7 +336,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;
-    app.manage(TrayItems { top, bottom, hide_taskbar, remove_taskbar, autostart });
+    app.manage(TrayItems { top, bottom, hide_taskbar, remove_taskbar, win_key, autostart });
     Ok(())
 }
 
@@ -356,7 +381,29 @@ fn main() {
             app_volume,
             keyboard_layout,
             shortcut,
-            task_menu
+            task_menu,
+            launcher::launcher_apps,
+            launcher::launcher_refresh,
+            launcher::launcher_launch,
+            launcher::launcher_reveal,
+            launcher::launcher_state,
+            launcher::launcher_pin,
+            launcher::launcher_recent,
+            launcher::launcher_search_files,
+            launcher::clipboard_set,
+            launcher::power_action,
+            network::network_info,
+            network::wifi_networks,
+            network::wifi_connect,
+            network::wifi_disconnect,
+            quick::quick_radios,
+            quick::quick_set_radio,
+            quick::quick_monitors,
+            quick::quick_set_brightness,
+            quick::quick_power_plans,
+            quick::quick_set_power_plan,
+            quick::quick_shortcut,
+            winkey::restore_focus
         ])
         // Alt+F4 sur la barre ne doit pas la fermer : on quitte via l'icône de notification.
         .on_window_event(|_, event| {
@@ -379,6 +426,10 @@ fn main() {
             audio::start(handle.clone());
             keyboard::start(handle.clone());
             weather::start(handle.clone());
+            launcher::start(handle.clone());
+            // Toujours démarré : le menu de l'icône peut activer la touche Windows en cours de route.
+            winkey::set_enabled(cfg.win_key);
+            winkey::start(handle.clone());
             if cfg.tray {
                 tray::start(handle.clone());
             }

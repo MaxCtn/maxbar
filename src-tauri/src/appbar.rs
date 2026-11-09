@@ -42,6 +42,8 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 static BAR: AtomicIsize = AtomicIsize::new(0);
 static REGISTERED: AtomicBool = AtomicBool::new(false);
 static HIDDEN: AtomicBool = AtomicBool::new(false);
+/// Une app plein écran est au premier plan, sur n'importe quel écran.
+static GAME: AtomicBool = AtomicBool::new(false);
 static BOTTOM: AtomicBool = AtomicBool::new(false);
 static HEIGHT: AtomicU32 = AtomicU32::new(42);
 static SCALE: AtomicU64 = AtomicU64::new(0);
@@ -252,6 +254,12 @@ pub fn fullscreen_active() -> bool {
     HIDDEN.load(Relaxed)
 }
 
+/// Vrai quand une app plein écran est au premier plan, même sur un autre écran que la barre : les travaux
+/// de fond (hook clavier, indexation) s'effacent alors aussi, la barre restant affichée.
+pub fn fullscreen_anywhere() -> bool {
+    GAME.load(Relaxed)
+}
+
 /// Cache la barre quand l'app au premier plan est en plein écran (jeu, vidéo).
 pub fn check_fullscreen() {
     let bar = hwnd();
@@ -261,10 +269,15 @@ pub fn check_fullscreen() {
     enforce_taskbar();
     unsafe {
         let fg = GetForegroundWindow();
+        if fg == bar {
+            GAME.store(false, Relaxed);
+        }
         if fg.is_invalid() || fg == bar {
             return;
         }
         let full = is_fullscreen(fg, bar);
+        // Sur un écran sans barre des tâches, une fenêtre maximisée le couvre aussi : ce n'est pas un jeu.
+        GAME.store(full || (!IsZoomed(fg).as_bool() && covers_monitor(fg)), Relaxed);
         if full != HIDDEN.swap(full, Relaxed) {
             let _ = ShowWindowAsync(bar, if full { SW_HIDE } else { SW_SHOWNOACTIVATE });
             set_webview_visible(!full);
@@ -281,13 +294,16 @@ fn set_webview_visible(visible: bool) {
 }
 
 unsafe fn is_fullscreen(fg: HWND, bar: HWND) -> bool {
+    MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST) == MonitorFromWindow(bar, MONITOR_DEFAULTTONEAREST)
+        && covers_monitor(fg)
+}
+
+/// La fenêtre couvre tout son écran.
+unsafe fn covers_monitor(fg: HWND) -> bool {
     if is_shell_window(fg) {
         return false;
     }
     let mon = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
-    if mon != MonitorFromWindow(bar, MONITOR_DEFAULTTONEAREST) {
-        return false;
-    }
     let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
     if !GetMonitorInfoW(mon, &mut mi).as_bool() {
         return false;
